@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Webform Presets",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Save and fill webform data securely with encrypted presets. Never stores passwords.",
   "icons": {
     "16": "icons/icon16.png",

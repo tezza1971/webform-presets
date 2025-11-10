@@ -207,8 +207,20 @@ async function handleSavePreset(tab) {
       return;
     }
     
-    // TODO: Open save modal with captured data
-    console.log('Captured form data:', response);
+    // Handle multiple forms or single form
+    if (response.multipleForms) {
+      // Show form selection modal
+      await chrome.tabs.sendMessage(tab.id, {
+        action: 'showFormSelectionModal',
+        forms: response.forms
+      });
+    } else {
+      // Show save modal directly
+      await chrome.tabs.sendMessage(tab.id, {
+        action: 'showSaveModal',
+        formData: response
+      });
+    }
   } catch (error) {
     console.error('Error in handleSavePreset:', error);
   }
