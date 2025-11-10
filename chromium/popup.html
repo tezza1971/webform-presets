@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Webform Presets</title>
+  <link rel="stylesheet" href="styles/popup.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Webform Presets</h1>
+    </header>
+    
+    <div id="locked-state" class="state-section" style="display: none;">
+      <div class="lock-icon">🔒</div>
+      <p>Extension is locked</p>
+      <button id="unlock-btn" class="primary-btn">Unlock</button>
+    </div>
+    
+    <div id="unlocked-state" class="state-section" style="display: none;">
+      <section class="presets-section">
+        <h2>Available Presets</h2>
+        <div id="presets-list" class="presets-list">
+          <p class="no-presets">No presets for this page</p>
+        </div>
+      </section>
+      
+      <section class="actions-section">
+        <button id="save-btn" class="action-btn">
+          <span class="icon">💾</span>
+          Save Current Form
+        </button>
+        <button id="manage-btn" class="action-btn">
+          <span class="icon">⚙️</span>
+          Manage Presets
+        </button>
+      </section>
+    </div>
+    
+    <footer>
+      <p class="version">v1.0.0</p>
+    </footer>
+  </div>
+  
+  <script src="scripts/popup.js"></script>
+</body>
+</html>

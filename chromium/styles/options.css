@@ -1,0 +1,414 @@
+/* Options/Management Page Styles */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  background: #f5f7fa;
+  color: #333;
+}
+
+.options-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 20px 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.header h1 {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.header-actions button {
+  padding: 8px 16px;
+  background: rgba(255,255,255,0.2);
+  color: white;
+  border: 1px solid rgba(255,255,255,0.3);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.header-actions button:hover {
+  background: rgba(255,255,255,0.3);
+}
+
+/* Locked View */
+.locked-view {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lock-screen {
+  text-align: center;
+  padding: 40px;
+}
+
+.lock-icon {
+  font-size: 64px;
+  margin-bottom: 20px;
+}
+
+.lock-screen h2 {
+  font-size: 24px;
+  margin-bottom: 10px;
+}
+
+.lock-screen p {
+  color: #666;
+  margin-bottom: 30px;
+}
+
+/* Unlocked View */
+.unlocked-view {
+  flex: 1;
+  display: flex;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 280px;
+  background: white;
+  padding: 20px;
+  border-right: 1px solid #e0e0e0;
+  overflow-y: auto;
+}
+
+.nav-section {
+  margin-bottom: 30px;
+}
+
+.nav-section h3 {
+  font-size: 14px;
+  text-transform: uppercase;
+  color: #999;
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+.nav-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: #f5f7fa;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 8px;
+  transition: all 0.2s;
+}
+
+.nav-btn:hover {
+  background: #e8ebf0;
+  transform: translateX(2px);
+}
+
+.nav-btn .icon {
+  font-size: 18px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 10px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+/* Statistics */
+.stats {
+  background: #f5f7fa;
+  padding: 15px;
+  border-radius: 8px;
+}
+
+.stat-item {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.stat-item:last-child {
+  margin-bottom: 0;
+}
+
+.stat-label {
+  color: #666;
+}
+
+.stat-value {
+  font-weight: 600;
+  color: #667eea;
+}
+
+/* Main Content */
+.main-content {
+  flex: 1;
+  padding: 30px 40px;
+  overflow-y: auto;
+}
+
+.content-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.content-header h2 {
+  font-size: 24px;
+}
+
+.view-controls {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-small {
+  padding: 6px 12px;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.btn-small:hover {
+  border-color: #667eea;
+  color: #667eea;
+}
+
+/* Presets Container */
+.presets-container {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.empty-icon {
+  font-size: 64px;
+  margin-bottom: 20px;
+  opacity: 0.5;
+}
+
+.empty-state h3 {
+  font-size: 20px;
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.empty-state p {
+  color: #666;
+  font-size: 14px;
+}
+
+/* Scope Item */
+.scope-item {
+  margin-bottom: 15px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.scope-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  background: #f9fafb;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.scope-header:hover {
+  background: #f3f4f6;
+}
+
+.scope-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.scope-icon {
+  font-size: 20px;
+}
+
+.scope-name {
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.scope-badge {
+  background: #667eea;
+  color: white;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.scope-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-icon {
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.btn-icon:hover {
+  background: rgba(0,0,0,0.05);
+}
+
+.scope-content {
+  display: none;
+  padding: 10px 15px 15px;
+  background: white;
+}
+
+.scope-item.expanded .scope-content {
+  display: block;
+}
+
+.scope-item.expanded .expand-btn {
+  transform: rotate(180deg);
+}
+
+/* Preset Item */
+.preset-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  transition: all 0.2s;
+}
+
+.preset-item:hover {
+  border-color: #667eea;
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.1);
+}
+
+.preset-item:last-child {
+  margin-bottom: 0;
+}
+
+.preset-info {
+  flex: 1;
+}
+
+.preset-name {
+  font-weight: 500;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.preset-meta {
+  font-size: 12px;
+  color: #999;
+}
+
+.preset-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.delete-preset-btn {
+  padding: 6px 12px;
+  background: #fee;
+  color: #c33;
+  border: 1px solid #fcc;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.delete-preset-btn:hover {
+  background: #fcc;
+  border-color: #faa;
+}
+
+.delete-scope-btn {
+  color: #c33;
+}
+
+/* Buttons */
+.primary-btn {
+  padding: 10px 20px;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.primary-btn:hover {
+  background: #5568d3;
+}
+
+.btn-secondary {
+  padding: 8px 16px;
+  background: white;
+  color: #333;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+  border-color: #667eea;
+  color: #667eea;
+}

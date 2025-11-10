@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Unlock Webform Presets</title>
+  <link rel="stylesheet" href="styles/unlock.css">
+</head>
+<body>
+  <div class="unlock-container">
+    <div class="unlock-card">
+      <div class="lock-icon-large">🔐</div>
+      <h1>Unlock Webform Presets</h1>
+      <p class="subtitle">Enter your master password to access your presets</p>
+      
+      <form id="unlock-form">
+        <div class="form-group">
+          <label for="master-password">Master Password</label>
+          <input 
+            type="password" 
+            id="master-password" 
+            name="master-password"
+            autocomplete="current-password"
+            placeholder="Enter your master password"
+            required
+            autofocus
+          >
+        </div>
+        
+        <div id="error-message" class="error-message" style="display: none;"></div>
+        
+        <button type="submit" id="unlock-btn" class="primary-btn">
+          Unlock
+        </button>
+      </form>
+      
+      <div class="help-text">
+        <p>💡 Your password manager should auto-fill this field</p>
+        <p class="warning">⚠️ If you've forgotten your password, you'll need to reset all data</p>
+      </div>
+      
+      <div class="reset-section">
+        <button id="reset-btn" class="danger-btn-link">Reset All Data</button>
+      </div>
+    </div>
+  </div>
+  
+  <script src="scripts/unlock.js"></script>
+</body>
+</html>

@@ -1,0 +1,513 @@
+specVersion: "1.0.0"
+projectName: "Webform Presets"
+projectDescription: "A browser extension to save and fill webform data, excluding passwords. It prioritizes local storage, strong encryption, and user control."
+targetPlatform: "Chromium (MVP)"
+repository: "https://github.com/tezza1971/webform-presets"
+
+# ==============================================================================
+# CORE: SECURITY & STORAGE
+# ==============================================================================
+
+security:
+  description: "The security model is paramount. All data is stored locally and encrypted with a key that is never persisted to disk."
+  
+  storage:
+    type: "chrome.storage.local"
+    description: "Use the browser's local, sandboxed storage. Do not use chrome.storage.sync as data may be large and is sensitive."
+    
+  encryption:
+    algorithm: "AES-GCM"
+    keySize: 256
+    description: "All preset data blobs stored in chrome.storage.local must be encrypted using AES-GCM with 256-bit keys."
+    
+  passwordExclusion:
+    enforced: true
+    description: |
+      CRITICAL: The extension must NEVER save, store, or fill any field identified as
+      input[type="password"]. This functionality is delegated to the user's primary 
+      password manager. This rule must be enforced at the point of saving and the 
+      point of filling.
+    implementation:
+      - "Filter out password fields when capturing form data"
+      - "Skip password fields when filling forms"
+      - "Validate that no password fields are in saved presets"
+      
+  keyManagement:
+    keySource: "Master Password (user-provided, per-session)"
+    keyDerivation: 
+      algorithm: "PBKDF2"
+      alternative: "Argon2 (if available via library)"
+      iterations: 100000
+      hashFunction: "SHA-256"
+    keyStorage: "In-memory only. The derived encryption key must only exist in the extension's memory space for the duration of the browser session."
+    salt:
+      generation: "A unique salt must be generated per-user on first use"
+      storage: "chrome.storage.local (salt is not secret, but must be consistent)"
+      
+  unlockFlow:
+    trigger: "On first attempt to use any extension feature (save/fill/manage) in a new browser session."
+    ui: "Open a dedicated, non-dismissable tab with a single password field (unlock.html)."
+    purpose: |
+      This HTML page allows the user's password manager (e.g., Bitwarden, 1Password)
+      to recognize the field and auto-fill the Master Password, making the unlock 
+      process seamless.
+    action: "On successful submission, derive the key, store it in memory, and close the unlock tab, resuming the user's original action."
+    failure: "After 3 failed attempts, show a message explaining that the password is incorrect and offer a data reset option (which clears all stored data)."
+
+# ==============================================================================
+# CORE: DATA MODEL
+# ==============================================================================
+
+dataModel:
+  description: "Defines the structure of the data stored in chrome.storage.local."
+  
+  storageSchema:
+    description: "The storage is a key-value store. Each key is a scope identifier."
+    structure:
+      scopeKey:
+        type: "string"
+        examples:
+          - "domain:google.com"
+          - "url:https://login.google.com/path"
+        description: "Namespaced key indicating scope type and value"
+      scopeValue:
+        type: "object"
+        properties:
+          scopeType:
+            type: "string"
+            enum: ["domain", "url"]
+          presets:
+            type: "array"
+            items:
+              type: "object"
+              description: "See presetObject definition below"
+              
+  definitions:
+    presetObject:
+      type: "object"
+      properties:
+        id:
+          type: "string"
+          format: "uuid"
+          description: "Unique identifier for the preset (UUID v4)"
+        name:
+          type: "string"
+          description: "User-defined friendly name (e.g., 'Admin User', 'Test Account')"
+          maxLength: 100
+        createdAt:
+          type: "string"
+          format: "ISO 8601"
+          description: "Timestamp when preset was created"
+        updatedAt:
+          type: "string"
+          format: "ISO 8601"
+          description: "Timestamp when preset was last modified"
+        formSelector:
+          type: "object"
+          description: "Stored identifier to find the form on the page reliably"
+          properties:
+            type:
+              type: "string"
+              enum: ["id", "name", "css"]
+              description: "Type of selector used to identify the form"
+            value:
+              type: "string"
+              description: "The value of the selector (e.g., 'loginForm' or 'form[action=\"/login\"]')"
+        data:
+          type: "string"
+          description: "The AES-GCM encrypted JSON string of the form data (includes IV and auth tag)"
+          
+    decryptedData:
+      type: "object"
+      description: "The structure of the decrypted JSON blob"
+      additionalProperties:
+        type: "string"
+        description: |
+          A simple key-value map, where key is the 'name' attribute of the
+          form field, and value is its stored value. Only non-password fields
+          are included.
+      example:
+        username: "john.doe@example.com"
+        email: "john.doe@example.com"
+        firstName: "John"
+        lastName: "Doe"
+        country: "US"
+
+# ==============================================================================
+# FEATURE: SAVE PRESET
+# ==============================================================================
+
+features:
+  savePreset:
+    description: "The flow for capturing and saving form data"
+    
+    trigger:
+      method: "Context Menu"
+      path: "Right-click -> Webform Presets -> Save as Preset..."
+      alternativeTrigger: "Extension popup -> Save Current Form"
+      
+    multiFormHandling:
+      condition: "More than one <form> element detected on the page"
+      action: "Prompt the user (modal or popup) to select which form they wish to save"
+      formIdentification: |
+        Identify forms to the user by their id, name, or a unique CSS selector. 
+        This selector must be stored as the formSelector in the presetObject.
+      displayFormat: "Show form identifier and count of non-password fields in each form"
+      
+    saveModal:
+      description: "A modal/popup UI presented to the user to configure the new preset"
+      fields:
+        - name: "presetName"
+          type: "text"
+          label: "Preset Name"
+          placeholder: "e.g., Admin User, Test Account"
+          required: true
+          validation: "Must be 1-100 characters"
+          
+        - name: "scope"
+          type: "radio"
+          label: "Save for:"
+          options:
+            - value: "domain"
+              label: "This Domain (e.g., google.com)"
+              description: "Preset will be available on all pages of this domain"
+            - value: "url"
+              label: "This Exact URL (e.g., google.com/login)"
+              description: "Preset will only be available on this specific page"
+          default: "domain"
+          
+        - name: "fieldSelection"
+          type: "checklist"
+          label: "Fields to include in preset:"
+          description: |
+            List all non-password fields from the selected form. All fields
+            are checked by default. The user can uncheck any fields they
+            wish to exclude from this preset (e.g., CSRF tokens, temporary codes).
+          display: "Show field name and current value for each field"
+          
+    action:
+      steps:
+        - "Validate that the master key is available in memory (unlock if necessary)"
+        - "Collect data from all checked non-password fields"
+        - "Serialize to a JSON object (as decryptedData)"
+        - "Encrypt the JSON object using the in-memory master key with AES-GCM"
+        - "Generate a new UUID for the preset id"
+        - "Create a new presetObject with id, name, formSelector, encrypted data, and timestamps"
+        - "Determine the scope key (domain:xxx or url:xxx)"
+        - "Load existing data for this scope from chrome.storage.local"
+        - "Append the new preset to the presets array"
+        - "Save the updated scope data back to chrome.storage.local"
+        - "Show success notification to user"
+
+# ==============================================================================
+# FEATURE: FILL PRESET
+# ==============================================================================
+
+  fillPreset:
+    description: "The flow for populating a form with a saved preset"
+    
+    trigger:
+      method: "Context Menu"
+      path: "Right-click -> Webform Presets -> Fill with..."
+      alternativeTrigger: "Extension popup -> Select preset from list"
+      
+    menu:
+      description: "The 'Fill with...' submenu dynamically populates with presets matching the current page's scope"
+      prioritization:
+        - "First check for exact URL matches (url:xxx)"
+        - "Then check for domain matches (domain:xxx)"
+      display: "Each preset name is shown with a count of fields it will fill"
+      subOptions:
+        - value: "overwrite"
+          label: "Overwrite"
+          icon: "replace-icon"
+        - value: "update"
+          label: "Update Only"
+          icon: "merge-icon"
+          
+    multiFormHandling:
+      condition: "More than one <form> element is on the page"
+      action: "Prompt the user to select which form to fill"
+      autoSelect: |
+        If the chosen preset has a formSelector that matches a form on the page, 
+        that form should be pre-selected in the prompt.
+        
+    contentScript:
+      injection: "Inject on page load at document_idle"
+      responsibilities:
+        - "Detect forms on the page"
+        - "Snapshot the initial state (value) of all non-password fields in all forms on the page"
+        - "Store this snapshot in a local JavaScript variable (window scope or content script scope)"
+        - "Listen for messages from background script to perform fill operations"
+        - "Track which fields have been modified by the user since page load"
+        
+    fillModes:
+      overwrite:
+        label: "Overwrite"
+        description: "Replaces form data with the preset. Sets all values from the preset, overwriting any existing values."
+        logic:
+          steps:
+            - "Decrypt the preset data"
+            - "For each field in the decrypted data:"
+            - "  - Find the corresponding element in the target form by name attribute"
+            - "  - Set its value to the value from the preset"
+            - "  - Trigger appropriate events (input, change) for framework compatibility"
+        note: "This mode does not clear fields that are NOT in the preset"
+        
+      updateOnly:
+        label: "Update Only"
+        description: "Fills only empty or unchanged fields. Leaves any fields you have manually edited untouched."
+        logic:
+          steps:
+            - "Decrypt the preset data"
+            - "Get the initial state snapshot from the content script"
+            - "Get the current state of the target form"
+            - "For each field in the decrypted data:"
+            - "  - Let initialValue = value from page-load snapshot"
+            - "  - Let currentValue = value from form right now"
+            - "  - Let presetValue = value from the preset"
+            - "  - If currentValue equals initialValue (user has not touched this field):"
+            - "    - Set the field's value to presetValue"
+            - "    - Trigger appropriate events"
+            - "  - If currentValue does not equal initialValue (user has edited this field):"
+            - "    - Do nothing, leave the user's change intact"
+        
+    errorHandling:
+      fieldNotFound: "Log warning but continue with other fields"
+      decryptionFailure: "Show error message and prompt user to unlock again"
+      noMatchingPresets: "Show message: 'No presets available for this page'"
+
+# ==============================================================================
+# FEATURE: MANAGEMENT CONSOLE
+# ==============================================================================
+
+  managementConsole:
+    description: "A dedicated page for managing all saved presets"
+    
+    access:
+      methods:
+        - "Via the browser action (toolbar icon) -> Manage Presets"
+        - "Via the options page (chrome://extensions -> Webform Presets -> Options)"
+        - "Via context menu -> Webform Presets -> Manage Presets"
+      file: "options.html"
+      
+    security:
+      locked: true
+      requirement: "User must enter the Master Password via the unlock.html flow to view or modify any data"
+      sessionTimeout: "Lock after 15 minutes of inactivity (configurable)"
+      lockTrigger: "Also lock when browser closes or extension reloads"
+      
+    functionality:
+      view:
+        description: "Display all saved scopes (domains/URLs) in a hierarchical list"
+        grouping: "Group by scope type (domains vs URLs)"
+        sorting: "Sort alphabetically within each group"
+        statistics: "Show count of presets for each scope"
+        
+      expand:
+        description: "Allow expanding a scope to see all presets saved for it"
+        presetDisplay:
+          - "Preset name"
+          - "Created date"
+          - "Last modified date"
+          - "Number of fields in preset"
+          - "Action buttons (Edit, Delete, Export)"
+          
+      deletePreset:
+        description: "Delete an individual preset"
+        confirmation: "Show confirmation dialog before deletion"
+        action: "Remove preset from the presets array and update chrome.storage.local"
+        
+      deleteScope:
+        description: "Delete all presets for a given scope"
+        label: "Delete All"
+        confirmation: "Show confirmation dialog with count of presets that will be deleted"
+        action: "Remove the entire scope key from chrome.storage.local"
+        
+      editPreset:
+        description: "Modify an existing preset"
+        capabilities:
+          - name: "Edit preset name"
+            action: "Update the name property and updatedAt timestamp"
+          - name: "Edit preset data"
+            action: |
+              Decrypt the data, show in a simple key-value form editor (field name -> field value),
+              allow user to modify values, add or remove fields, then re-encrypt and save
+          - name: "Change scope"
+            action: "Move preset from one scope to another (e.g., from domain to specific URL)"
+            
+      backupRestore:
+        export:
+          label: "Export All"
+          description: "Dumps the entire raw (still encrypted) content of chrome.storage.local into a single downloadable JSON file"
+          filename: "webform-presets-backup-{timestamp}.json"
+          contents: "All encrypted preset data plus metadata (version, export date, salt)"
+          
+        import:
+          label: "Import"
+          description: "Allows uploading a previously exported JSON file"
+          validation:
+            - "Verify JSON structure is valid"
+            - "Check that export version is compatible"
+            - "Verify salt matches (or prompt for master password to derive key)"
+          action: "Overwrite all current data with imported data"
+          warning: "Show prominent warning that this will replace all existing presets"
+          requirement: "User must have the same Master Password to decrypt imported data"
+          
+      search:
+        description: "Search functionality to find presets across all scopes"
+        searchFields:
+          - "Preset name"
+          - "Scope (domain/URL)"
+          - "Field names in preset (after decryption)"
+        display: "Show matching presets with highlighted search terms"
+
+# ==============================================================================
+# ARCHITECTURE & IMPLEMENTATION
+# ==============================================================================
+
+architecture:
+  components:
+    manifest:
+      version: 3
+      permissions:
+        - "storage"
+        - "contextMenus"
+        - "activeTab"
+        - "tabs"
+      host_permissions:
+        - "<all_urls>"
+      background:
+        service_worker: "background.js"
+        type: "module"
+        
+    background:
+      file: "background.js"
+      responsibilities:
+        - "Maintain the in-memory encryption key"
+        - "Handle context menu creation and clicks"
+        - "Coordinate between content scripts and UI pages"
+        - "Manage unlock flow"
+        - "Perform encryption/decryption operations"
+        - "Handle chrome.storage.local read/write operations"
+        
+    contentScript:
+      file: "content.js"
+      matches: "<all_urls>"
+      run_at: "document_idle"
+      responsibilities:
+        - "Detect forms on the page"
+        - "Capture initial state of form fields"
+        - "Inject saved data into forms"
+        - "Communicate with background script"
+        
+    popup:
+      file: "popup.html"
+      description: "Quick access UI when clicking the extension icon"
+      features:
+        - "Show available presets for current page"
+        - "Quick fill buttons"
+        - "Save current form button"
+        - "Link to management console"
+        
+    options:
+      file: "options.html"
+      description: "Full management console for presets"
+      features:
+        - "Complete preset management"
+        - "Search and filter"
+        - "Backup/restore"
+        - "Settings"
+        
+    unlock:
+      file: "unlock.html"
+      description: "Dedicated page for password entry"
+      features:
+        - "Single password input field"
+        - "Compatible with password managers"
+        - "Key derivation on submit"
+        - "Error handling for incorrect passwords"
+        
+  libraries:
+    cryptography:
+      recommended: "Web Crypto API (built into browsers)"
+      alternative: "crypto-js library for Argon2 if needed"
+    uuid:
+      recommended: "crypto.randomUUID() (built-in)"
+      alternative: "uuid library"
+
+# ==============================================================================
+# DEVELOPMENT GUIDELINES
+# ==============================================================================
+
+development:
+  codeStyle:
+    language: "JavaScript (ES6+)"
+    formatting: "Use Prettier with default settings"
+    linting: "ESLint with recommended rules"
+    
+  testing:
+    unit: "Jest for utility functions and encryption/decryption"
+    integration: "Manual testing in Chrome and Brave browsers"
+    security: "Security audit of encryption implementation"
+    
+  buildProcess:
+    bundler: "Not required for MVP (use plain JavaScript)"
+    optimization: "Minify for production release"
+    
+  versionControl:
+    strategy: "Git with semantic versioning"
+    branches:
+      - "main: Stable releases"
+      - "develop: Active development"
+      - "feature/*: Individual features"
+      
+  documentation:
+    inline: "JSDoc comments for all functions"
+    user: "README.md with installation and usage instructions"
+    api: "Document message passing protocol between components"
+
+# ==============================================================================
+# FUTURE ENHANCEMENTS (POST-MVP)
+# ==============================================================================
+
+futureFeatures:
+  - name: "Firefox Support"
+    description: "Adapt extension for Firefox using WebExtensions API"
+    effort: "Medium"
+    
+  - name: "Auto-fill on Page Load"
+    description: "Option to automatically fill forms when page loads (with user confirmation)"
+    effort: "Small"
+    
+  - name: "Preset Templates"
+    description: "Share encrypted preset templates (without values) for common forms"
+    effort: "Medium"
+    
+  - name: "Form Change Detection"
+    description: "Notify user when a saved form's structure changes significantly"
+    effort: "Medium"
+    
+  - name: "Multiple Master Passwords"
+    description: "Support for different password-protected preset collections"
+    effort: "Large"
+    
+  - name: "Cloud Sync (Optional)"
+    description: "End-to-end encrypted sync via user's own cloud storage"
+    effort: "Large"
+    
+  - name: "Biometric Unlock"
+    description: "Use WebAuthn for biometric authentication instead of master password"
+    effort: "Large"
+    
+  - name: "Preset Sharing"
+    description: "Export individual presets (encrypted) to share with others"
+    effort: "Small"
+    
+  - name: "Advanced Selectors"
+    description: "Support for XPath and more complex form detection"
+    effort: "Medium"
+    
+  - name: "Audit Log"
+    description: "Track when presets are used, created, or modified"
+    effort: "Small"

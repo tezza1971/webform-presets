@@ -1,0 +1,156 @@
+# Webform Presets - .gitignore
+
+# ============================================================================
+# Node / NPM (if we add build tools later)
+# ============================================================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+.pnpm-debug.log*
+
+# ============================================================================
+# Build / Distribution
+# ============================================================================
+dist/
+build/
+*.zip
+*.crx
+*.xpi
+
+# ============================================================================
+# IDE / Editor
+# ============================================================================
+
+# VSCode
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# IntelliJ / WebStorm
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# ============================================================================
+# Operating System
+# ============================================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# ============================================================================
+# Extension Development
+# ============================================================================
+
+# Packed extensions (if built)
+*.pem
+*.crx
+*.xpi
+*.zip
+
+# Test extension IDs and keys
+key.pem
+extension-key.pem
+
+# Browser profiles used for testing
+profiles/
+test-profiles/
+
+# ============================================================================
+# Temporary / Cache
+# ============================================================================
+*.log
+*.tmp
+*.temp
+.cache/
+.temp/
+tmp/
+temp/
+
+# ============================================================================
+# Security / Sensitive
+# ============================================================================
+
+# Never commit actual user data or keys
+*.key
+*.secret
+secrets/
+.env
+.env.local
+.env.*.local
+
+# ============================================================================
+# Testing
+# ============================================================================
+coverage/
+.nyc_output/
+test-results/
+*.test.log
+
+# ============================================================================
+# Documentation Build
+# ============================================================================
+docs/_build/
+docs/.doctrees/
+
+# ============================================================================
+# Backup files
+# ============================================================================
+*.bak
+*.backup
+*~
+
+# ============================================================================
+# Project Specific
+# ============================================================================
+
+# Temporary Python scripts (like the one we used to create spec.yml)
+create_*.py
+
+# Local development notes
+notes.txt
+TODO.local.md
+NOTES.md
