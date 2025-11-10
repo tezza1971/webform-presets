@@ -188,13 +188,17 @@ function getFieldValue(field) {
  * Capture form data for saving
  */
 function captureFormData(formSelector) {
+  console.log('Attempting to capture form with selector:', formSelector);
   const form = findFormBySelector(formSelector);
   
   if (!form) {
+    console.error('Form not found for selector:', formSelector);
     return { error: 'Form not found' };
   }
   
+  console.log('Form found:', form);
   const fields = getFormFields(form);
+  console.log('Fields found:', fields.length);
   const data = {};
   const fieldList = [];
   
@@ -348,11 +352,19 @@ async function handleMessage(message, sendResponse) {
     switch (message.action) {
       case 'captureFormData':
         const forms = getAllForms();
+        console.log('Forms found:', forms.length, forms);
         if (forms.length === 0) {
           sendResponse({ error: 'No forms found on page' });
         } else if (forms.length === 1) {
           const data = captureFormData(forms[0].selector);
-          sendResponse(data);
+          console.log('Captured form data:', data);
+          if (data.error) {
+            sendResponse({ error: data.error });
+          } else if (!data.fieldList || data.fieldList.length === 0) {
+            sendResponse({ error: 'No fields with names found in form' });
+          } else {
+            sendResponse(data);
+          }
         } else {
           // Multiple forms, need user to select
           sendResponse({ 
