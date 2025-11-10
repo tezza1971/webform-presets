@@ -9,6 +9,7 @@
 
 let encryptionKey = null; // In-memory encryption key (never persisted)
 let unlockCallbacks = []; // Pending actions waiting for unlock
+let presetMenuItems = new Set(); // Track preset menu item IDs
 
 // ============================================================================
 // INITIALIZATION
@@ -138,12 +139,10 @@ async function updateContextMenusForPage(url) {
 
     // Remove old preset menu items
     await chrome.contextMenus.remove('no-presets').catch(() => {});
-    const existingItems = await chrome.contextMenus.getAll();
-    for (const item of existingItems) {
-      if (item.id && item.id.startsWith('preset-')) {
-        await chrome.contextMenus.remove(item.id).catch(() => {});
-      }
+    for (const itemId of presetMenuItems) {
+      await chrome.contextMenus.remove(itemId).catch(() => {});
     }
+    presetMenuItems.clear();
 
     // Add preset items
     if (allPresets.length === 0) {
@@ -156,12 +155,14 @@ async function updateContextMenusForPage(url) {
       });
     } else {
       allPresets.forEach((preset, index) => {
+        const menuId = `preset-${preset.id}`;
         chrome.contextMenus.create({
-          id: `preset-${preset.id}`,
+          id: menuId,
           parentId: 'fill-preset-parent',
           title: preset.name,
           contexts: ['page', 'editable']
         });
+        presetMenuItems.add(menuId);
       });
     }
   } catch (error) {
@@ -223,6 +224,20 @@ async function handleSavePreset(tab) {
     }
   } catch (error) {
     console.error('Error in handleSavePreset:', error);
+    // If content script isn't loaded, try to inject it
+    if (error.message && error.message.includes('Could not establish connection')) {
+      console.log('Content script not loaded, attempting to inject...');
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['scripts/utils.js', 'content.js']
+        });
+        // Try again after injection
+        setTimeout(() => handleSavePreset(tab), 500);
+      } catch (injectError) {
+        console.error('Failed to inject content script:', injectError);
+      }
+    }
   }
 }
 
@@ -458,6 +473,15 @@ async function handleMessage(message, sender, sendResponse) {
         
       case 'getPresetsForPage':
         await handleGetPresetsForPage(message.url, sendResponse);
+        break;
+        
+      case 'triggerSavePreset':
+        // Delegate to the existing handleSavePreset logic
+        const tab = await chrome.tabs.get(message.tabId);
+        await ensureUnlocked(async () => {
+          await handleSavePreset(tab);
+          sendResponse({ success: true });
+        });
         break;
         
       default:

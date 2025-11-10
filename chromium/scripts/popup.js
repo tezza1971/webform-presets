@@ -74,21 +74,23 @@ async function handleUnlock() {
 async function handleSave() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const response = await chrome.tabs.sendMessage(tab.id, {
-      action: 'captureFormData'
+    
+    // Send to background script to coordinate the save
+    const response = await chrome.runtime.sendMessage({
+      action: 'triggerSavePreset',
+      tabId: tab.id
     });
     
-    if (response.error) {
+    if (response && response.error) {
       showNotification('Error', response.error, 'error');
       return;
     }
     
-    // TODO: Open save modal
-    console.log('Captured form data:', response);
-    showNotification('Info', 'Save modal not yet implemented', 'info');
+    // Close popup - the save modal will appear on the page
+    window.close();
   } catch (error) {
     console.error('Error saving:', error);
-    showNotification('Error', 'Could not capture form data', 'error');
+    showNotification('Error', 'Could not initiate save', 'error');
   }
 }
 
