@@ -3,8 +3,8 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -309,15 +309,25 @@ func (s *Server) handleGetDevices(w http.ResponseWriter, r *http.Request) {
 
 // Get sync log (all entries)
 func (s *Server) handleGetSyncLogAll(w http.ResponseWriter, r *http.Request) {
-	// Parse limit from query
+	// Parse limit and offset from query
 	limit := 50
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
 		fmt.Sscanf(limitStr, "%d", &limit)
 	}
 
-	// For now, return empty log
-	// TODO: Implement sync log storage
-	s.respondSuccess(w, []map[string]interface{}{}, "Sync log retrieved")
+	offset := 0
+	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
+		fmt.Sscanf(offsetStr, "%d", &offset)
+	}
+
+	logs, err := s.storage.GetAllSyncLog(limit, offset)
+	if err != nil {
+		s.logger.Error("Failed to retrieve sync log: %v", err)
+		s.respondError(w, http.StatusInternalServerError, "Failed to retrieve sync log")
+		return
+	}
+
+	s.respondSuccess(w, logs, fmt.Sprintf("Retrieved %d sync log entries", len(logs)))
 }
 
 // Manual cleanup endpoint
@@ -346,8 +356,12 @@ func (s *Server) handleCleanup(w http.ResponseWriter, r *http.Request) {
 // Middleware: IP filtering
 func (s *Server) ipFilterMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Extract IP from RemoteAddr
-		ip := strings.Split(r.RemoteAddr, ":")[0]
+		// Extract IP from RemoteAddr (handles both IPv4 and IPv6)
+		ip, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			// Fallback to original address if parsing fails
+			ip = r.RemoteAddr
+		}
 
 		if !s.ipFilters.isAllowed(ip) {
 			s.logger.Warn("IP blocked: %s", ip)
