@@ -319,6 +319,7 @@ function fillForm(formSelector, presetData, mode = 'overwrite') {
   const initialState = formSelector ? (formSnapshots.get(formSelector) || {}) : {};
   let filledCount = 0;
   let skippedCount = 0;
+  let passwordFieldsSkipped = 0;
   const filledFields = {};
   
   // Iterate through preset data
@@ -355,6 +356,7 @@ function fillForm(formSelector, presetData, mode = 'overwrite') {
     // Skip password fields
     if (field.type === 'password') {
       console.warn(`Skipping password field: ${fieldName}`);
+      passwordFieldsSkipped++;
       continue;
     }
     
@@ -363,11 +365,19 @@ function fillForm(formSelector, presetData, mode = 'overwrite') {
       const initialValue = initialState[fieldName] || '';
       const currentValue = getFieldValue({ element: field, type: field.type });
       
+      console.log(`[UPDATE MODE] Field ${fieldName}:`, {
+        initialValue,
+        currentValue,
+        hasChanged: currentValue !== initialValue
+      });
+      
       // Only fill if field hasn't been modified by user
       if (currentValue !== initialValue) {
+        console.log(`[UPDATE MODE] Skipping ${fieldName} - field has been modified`);
         skippedCount++;
         continue;
       }
+      console.log(`[UPDATE MODE] Filling ${fieldName} - field unchanged`);
     }
     
     // Set field value
@@ -415,9 +425,13 @@ function fillForm(formSelector, presetData, mode = 'overwrite') {
     }
     
     if (verifiedCount === filledCount) {
-      showToast(`✓ Verified ${verifiedCount} field(s)`, 'success');
+      const passwordNote = passwordFieldsSkipped > 0 ? ' (passwords skipped)' : '';
+      const modeNote = mode === 'update' && skippedCount > 0 ? `, ${skippedCount} unchanged` : '';
+      showToast(`✓ Verified ${verifiedCount} field(s)${modeNote}${passwordNote}`, 'success');
     } else {
-      showToast(`⚠ Filled ${filledCount} but only verified ${verifiedCount} field(s)`, 'warning');
+      const passwordNote = passwordFieldsSkipped > 0 ? ' (passwords skipped)' : '';
+      const modeNote = mode === 'update' && skippedCount > 0 ? `, ${skippedCount} unchanged` : '';
+      showToast(`⚠ Filled ${filledCount} but only verified ${verifiedCount} field(s)${modeNote}${passwordNote}`, 'warning');
     }
   }, 200);
   
@@ -425,7 +439,8 @@ function fillForm(formSelector, presetData, mode = 'overwrite') {
     success: true,
     filledCount,
     skippedCount,
-    message: `Filled ${filledCount} field(s)${skippedCount > 0 ? `, skipped ${skippedCount}` : ''}`
+    passwordFieldsSkipped,
+    message: `Filled ${filledCount} field(s)${skippedCount > 0 ? `, skipped ${skippedCount} modified` : ''}${passwordFieldsSkipped > 0 ? ', passwords skipped' : ''}`
   };
 }
 
@@ -661,22 +676,29 @@ function showSaveModal(formData) {
     
     return `
     <label style="
-      display: flex;
-      align-items: center;
-      padding: 8px;
-      border-radius: 4px;
+      display: inline-flex;
+      align-items: flex-start;
+      padding: 10px 12px;
+      border: 2px solid #e5e7eb;
+      border-radius: 6px;
       cursor: pointer;
-      transition: background 0.2s;
-    " onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background='transparent'">
+      transition: all 0.2s;
+      margin: 4px;
+      min-width: 200px;
+      flex: 1 1 auto;
+      background: white;
+    " class="wfp-field-checkbox" onmouseover="this.style.borderColor='#667eea'; this.style.background='#f5f7ff'" onmouseout="this.style.borderColor='#e5e7eb'; this.style.background='white'">
       <input type="checkbox" checked value="${escapeHtml(field.name)}" style="
-        margin-right: 8px;
-        width: 16px;
-        height: 16px;
+        margin-right: 10px;
+        margin-top: 2px;
+        width: 18px;
+        height: 18px;
         cursor: pointer;
+        flex-shrink: 0;
       ">
-      <div style="flex: 1;">
-        <div style="font-weight: 500; font-size: 14px;">${escapeHtml(displayName)}</div>
-        <div style="font-size: 12px; color: #6b7280;">
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-weight: 500; font-size: 13px; margin-bottom: 2px; word-break: break-word;">${escapeHtml(displayName)}</div>
+        <div style="font-size: 11px; color: #6b7280; word-break: break-word;">
           ${secondaryInfo ? escapeHtml(secondaryInfo) + ' • ' : ''}${escapeHtml(field.type)} • ${escapeHtml(field.value.substring(0, 50))}${field.value.length > 50 ? '...' : ''}
         </div>
       </div>
@@ -755,11 +777,13 @@ function showSaveModal(formData) {
           Fields to Include: (${formData.fieldList.length})
         </label>
         <div id="wfp-field-list" style="
-          max-height: 200px;
-          overflow-y: auto;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0;
           border: 1px solid #e5e7eb;
           border-radius: 6px;
           padding: 8px;
+          background: #f9fafb;
         ">
           ${fieldCheckboxes}
         </div>
@@ -809,7 +833,7 @@ function showSaveModal(formData) {
     </form>
   `;
 
-  const modal = createModal(modalContent, { width: '550px', closeOnOverlayClick: false });
+  const modal = createModal(modalContent, { width: '900px', closeOnOverlayClick: false });
   document.body.appendChild(modal);
 
   // Radio button styling
@@ -899,7 +923,10 @@ function showSaveModal(formData) {
       }
 
       modal.remove();
-      showToast('Preset saved successfully!', 'success');
+      
+      // Add password note if the form has password fields
+      const passwordNote = formData.hasPasswordField ? ' (passwords not included)' : '';
+      showToast(`Preset saved successfully!${passwordNote}`, 'success');
     } catch (error) {
       console.error('Error saving preset:', error);
       showToast('Failed to save preset: ' + error.message, 'error');

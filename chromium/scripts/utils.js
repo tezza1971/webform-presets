@@ -24,19 +24,44 @@ function createModal(content, options = {}) {
     justify-content: center;
     z-index: 999999;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    padding: 16px;
   `;
 
   const modal = document.createElement('div');
   modal.className = 'wfp-modal';
+  
+  // Responsive width: 90% on desktop with max-width, 100% on mobile
+  const width = options.width || '800px';
   modal.style.cssText = `
     background: white;
     border-radius: 12px;
     padding: 24px;
-    max-width: ${options.width || '500px'};
-    max-height: 80vh;
+    width: 90%;
+    max-width: ${width};
+    max-height: 90vh;
     overflow-y: auto;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
   `;
+  
+  // Mobile adjustments
+  const mobileStyles = document.createElement('style');
+  mobileStyles.textContent = `
+    @media (max-width: 768px) {
+      .wfp-modal {
+        width: 100% !important;
+        max-width: 100% !important;
+        max-height: 100vh !important;
+        border-radius: 0 !important;
+      }
+      .wfp-modal-overlay {
+        padding: 0 !important;
+      }
+    }
+  `;
+  if (!document.getElementById('wfp-modal-styles')) {
+    mobileStyles.id = 'wfp-modal-styles';
+    document.head.appendChild(mobileStyles);
+  }
 
   modal.innerHTML = content;
   overlay.appendChild(modal);
