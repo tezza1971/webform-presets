@@ -1,5 +1,5 @@
 # User Acceptance Testing (UAT) Plan
-## Webform Presets Browser Extension
+## NDX Webform Presets Browser Extension
 
 **Version:** 1.0  
 **Last Updated:** November 12, 2025  

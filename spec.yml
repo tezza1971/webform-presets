@@ -1,8 +1,8 @@
 specVersion: "1.0.0"
-projectName: "Webform Presets"
-projectDescription: "A browser extension to save and fill webform data, excluding passwords. It prioritizes local storage, strong encryption, and user control. Includes an optional local sync service for cross-device synchronization."
+projectName: "NDX Webform Presets"
+projectDescription: "A browser extension to save and fill webform data by NDX Pty Ltd, excluding passwords. It prioritizes local storage, strong encryption, and user control. Includes an optional local sync service for cross-device synchronization."
 targetPlatform: "Chromium (MVP)"
-repository: "https://github.com/tezza1971/webform-presets"
+repository: "https://github.com/ndx-video/webform-presets"
 
 # ==============================================================================
 # PROJECT STRUCTURE

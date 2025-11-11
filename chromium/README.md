@@ -1,6 +1,6 @@
-# Webform Presets - Chromium Extension
+# NDX Webform Presets - Chromium Extension
 
-A browser extension to save and fill webform data securely with encrypted presets. Never stores passwords.
+A browser extension to save and fill webform data securely with encrypted presets by NDX Pty Ltd. Never stores passwords.
 
 ## Directory Structure
 
@@ -54,7 +54,7 @@ chromium/
 2. Navigate to any website with a form
 3. Click the extension icon and set a master password
 4. Fill out some fields in the form
-5. Right-click on a form field → "Webform Presets" → "Save Webform Preset"
+5. Right-click on a form field → "NDX Webform Presets" → "Save Webform Preset"
 6. Name your preset and click Save
 7. Clear the form and right-click on a form field again
 8. Select a preset from the context menu to fill the form
@@ -94,7 +94,7 @@ chromium/
 **Single Form on Page:**
 1. Fill out a form on any website
 2. Right-click in any form field
-3. Select "Webform Presets" → "Save as Preset..."
+3. Select "NDX Webform Presets" → "Save as Preset..."
 4. Form is automatically detected from your right-click location
 
 **Multiple Forms on Page:**
@@ -119,7 +119,7 @@ chromium/
 **Using Context Menu:**
 1. Navigate to a page with a saved preset
 2. Right-click in a form field
-3. Select "Webform Presets" → "Fill with..." → [preset name]
+3. Select "NDX Webform Presets" → "Fill with..." → [preset name]
 4. Form fields will be automatically filled
 5. Success toast shows number of fields filled
 
@@ -131,7 +131,7 @@ chromium/
 ### Managing Presets
 
 1. Click the extension icon → "Manage Presets"
-2. Or right-click in a form field → "Webform Presets" → "Manage Presets"
+2. Or right-click in a form field → "NDX Webform Presets" → "Manage Presets"
 3. View all saved presets organized by scope
 
 **Management Features:**

@@ -1,10 +1,12 @@
-# Webform Presets
+# NDX Webform Presets
 
 A secure browser extension for saving and filling web forms with encrypted presets. Never stores passwords, works seamlessly with password managers.
 
+**By NDX Pty Ltd**
+
 ## 🎯 Overview
 
-Webform Presets helps you save time filling out repetitive web forms by storing your form data as reusable "presets". All data is encrypted locally using AES-GCM 256-bit encryption - your data never leaves your device.
+NDX Webform Presets helps you save time filling out repetitive web forms by storing your form data as reusable "presets". All data is encrypted locally using AES-GCM 256-bit encryption - your data never leaves your device.
 
 **Key Features:**
 - 🔐 Military-grade encryption (AES-GCM 256-bit)
@@ -24,7 +26,7 @@ Webform Presets helps you save time filling out repetitive web forms by storing 
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/yourusername/webform-presets.git
+   git clone https://github.com/ndx-video/webform-presets.git
    cd webform-presets
    ```
 
@@ -42,13 +44,13 @@ Webform Presets helps you save time filling out repetitive web forms by storing 
 
 **Save a form:**
 1. Fill out a web form
-2. Right-click → "Webform Presets" → "Save as Preset..."
+2. Right-click → "NDX Webform Presets" → "Save as Preset..."
 3. Name your preset and select fields to include
 4. Click Save
 
 **Fill a form:**
 1. Navigate to a page with saved presets
-2. Right-click in a form field → "Webform Presets" → "Fill with..." → [preset name]
+2. Right-click in a form field → "NDX Webform Presets" → "Fill with..." → [preset name]
 3. Fields are automatically filled!
 
 **Manage presets:**
@@ -186,12 +188,13 @@ This is currently a personal project. If you'd like to contribute:
 
 See [LICENSE](LICENSE) file for details.
 
-## 💡 Inspiration
+## 💡 Why was it built?
 
-Built to solve the problem of repeatedly filling out web forms while maintaining security and privacy. Designed to work alongside password managers rather than replace them.
+Built to solve the problem of repeatedly filling out web forms while maintaining security and privacy. Designed to work alongside password managers rather than replace them. A lot of form fillers exist, but often they are an after-thought as part of another system (like a password manager) or they want you to send your data to the cloud, or they store your data unencrypted. Mostly, the implementations are poor quality. It's actually very difficult trying to make this functionality reliable when web forms have so much variability, and extension implementation by browser platforms have so much variability, but thousands of hours can be saved by teams who grind away at human-centric data entry. Even though AI has improved at this, there will always be a human somwhere, punching repetive data into some sort of web form or web app. The theme of data sovereignt continues even when you use the NDX Webform Sync server which allows you to share form data across multiple web browsers on the same machine, multiple machines on your private LAN, or even multiple locations on your virtual private network. We will also provide an SSO solution for enterprises who want to host their own server with IAM features.
 
 ## 🙏 Acknowledgments
 
+- JSZip used for exports/imports
 - Built with Chrome Extensions Manifest V3
 - Uses Web Crypto API for encryption
 - Follows OWASP security best practices

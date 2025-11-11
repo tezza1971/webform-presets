@@ -1,5 +1,5 @@
 /**
- * Shared utilities for Webform Presets Extension
+ * Shared utilities for NDX Webform Presets Extension
  */
 
 // ============================================================================

@@ -362,7 +362,7 @@ async function exportAllCollections() {
     const manifest = chrome.runtime.getManifest();
     const exportData = {
       version: manifest.version,
-      appName: 'Webform Presets',
+      appName: 'NDX Webform Presets',
       exportDate: new Date().toISOString(),
       exportType: 'all-collections',
       collections: []
@@ -478,8 +478,8 @@ async function createAndDownloadZip(exportData, type) {
     }
     
     // Add JSON file to ZIP
-    console.log('[EXPORT] Adding webform-presets-export.json to archive...');
-    zip.file('webform-presets-export.json', jsonData);
+    console.log('[EXPORT] Adding ndx-webform-presets-export.json to archive...');
+    zip.file('ndx-webform-presets-export.json', jsonData);
     
     // Add README
     console.log('[EXPORT] Creating README.txt...');
@@ -495,7 +495,10 @@ This archive contains encrypted preset data from the Webform Presets extension.
 The data remains encrypted and can only be decrypted with the correct collection password(s).
 
 To import:
-1. Install the Webform Presets extension (version ${exportData.version} or compatible)
+
+HOW TO IMPORT
+-------------
+1. Install the NDX Webform Presets extension (version ${exportData.version} or compatible)
 2. Open the preset manager
 3. Click "Import" and select this ZIP file
 4. Enter the collection password when prompted
@@ -596,7 +599,11 @@ async function handleZipImport(file) {
     console.log('[IMPORT] ZIP loaded, files:', Object.keys(zip.files));
     
     // Look for the JSON file
-    const jsonFile = zip.file('webform-presets-export.json');
+        // Try to find the JSON file in the ZIP (try both old and new naming)
+    let jsonFile = zip.file('ndx-webform-presets-export.json');
+    if (!jsonFile) {
+      jsonFile = zip.file('webform-presets-export.json'); // Legacy support
+    }
     if (!jsonFile) {
       console.error('[IMPORT] JSON file not found in ZIP');
       throw new Error('Invalid export file - missing data file');
