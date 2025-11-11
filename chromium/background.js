@@ -10,6 +10,56 @@
 let encryptionKey = null; // In-memory encryption key (never persisted)
 let unlockCallbacks = []; // Pending actions waiting for unlock
 let presetMenuItems = new Set(); // Track preset menu item IDs
+let keepAliveInterval = null; // Interval to keep service worker alive
+let keepAlivePorts = new Set(); // Connected ports to keep service worker alive
+
+// Keep service worker alive while unlocked using both interval and ports
+function startKeepAlive() {
+  if (keepAliveInterval) return;
+  
+  // Method 1: Interval ping every 20 seconds
+  keepAliveInterval = setInterval(() => {
+    if (encryptionKey) {
+      console.log('[KEEPALIVE] Ping - service worker kept alive');
+    } else {
+      // No longer unlocked, stop keeping alive
+      stopKeepAlive();
+    }
+  }, 20000);
+  
+  console.log('[KEEPALIVE] Started');
+}
+
+function stopKeepAlive() {
+  if (keepAliveInterval) {
+    clearInterval(keepAliveInterval);
+    keepAliveInterval = null;
+    console.log('[KEEPALIVE] Stopped');
+  }
+  
+  // Disconnect all keep-alive ports
+  keepAlivePorts.forEach(port => {
+    try {
+      port.disconnect();
+    } catch (e) {
+      // Already disconnected
+    }
+  });
+  keepAlivePorts.clear();
+}
+
+// Handle long-lived connections that keep the service worker alive
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name === 'keepalive') {
+    console.log('[KEEPALIVE] Port connected');
+    keepAlivePorts.add(port);
+    
+    port.onDisconnect.addListener(() => {
+      console.log('[KEEPALIVE] Port disconnected');
+      keepAlivePorts.delete(port);
+    });
+  }
+});
 
 // ============================================================================
 // INITIALIZATION
@@ -21,22 +71,56 @@ chrome.runtime.onInstalled.addListener(async () => {
 });
 
 chrome.runtime.onStartup.addListener(() => {
-  console.log('Browser started, encryption key cleared');
+  console.log('[STARTUP] Browser started, encryption key cleared');
   encryptionKey = null;
+  stopKeepAlive();
+});
+
+// Detect when service worker wakes up from idle
+self.addEventListener('activate', async (event) => {
+  console.log('[SERVICE_WORKER] Service worker activated/woke up');
+  
+  // Check if we should still be unlocked
+  const sessionState = await chrome.storage.session.get(['isUnlocked', 'unlockedAt']);
+  
+  if (sessionState.isUnlocked && !encryptionKey) {
+    console.log('[SERVICE_WORKER] Session indicates unlocked but encryption key lost');
+    console.log('[SERVICE_WORKER] User will need to unlock again');
+    
+    // Clear the session state since we lost the key
+    await chrome.storage.session.remove(['isUnlocked', 'unlockedAt']);
+  } else if (encryptionKey) {
+    console.log('[SERVICE_WORKER] Encryption key still in memory');
+    // Restart keep-alive if needed
+    if (!keepAliveInterval) {
+      startKeepAlive();
+    }
+  }
 });
 
 // Listen for tab updates to refresh context menus
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.url) {
-    updateContextMenusForPage(tab.url);
+    // Don't await - let it run in background, errors handled internally
+    updateContextMenusForPage(tab.url).catch(err => {
+      // Silently ignore errors from context menu updates
+      // These commonly occur when tabs close or content scripts aren't ready
+    });
   }
 });
 
 // Listen for tab activation to refresh context menus
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
-  const tab = await chrome.tabs.get(activeInfo.tabId);
-  if (tab.url) {
-    updateContextMenusForPage(tab.url);
+  try {
+    const tab = await chrome.tabs.get(activeInfo.tabId);
+    if (tab.url) {
+      // Don't await - let it run in background, errors handled internally
+      updateContextMenusForPage(tab.url).catch(err => {
+        // Silently ignore errors from context menu updates
+      });
+    }
+  } catch (error) {
+    // Tab may have been closed before we could get it
   }
 });
 
@@ -170,7 +254,8 @@ async function updateContextMenusForPage(url) {
     
     if (tabs.length > 0) {
       // Filter presets to only those whose forms exist on the page
-      const formChecks = await Promise.all(
+      // Use Promise.allSettled to avoid Promise rejection cascades
+      const formChecks = await Promise.allSettled(
         allPresets.map(async preset => {
           try {
             const response = await chrome.tabs.sendMessage(tabs[0].id, {
@@ -179,13 +264,16 @@ async function updateContextMenusForPage(url) {
             });
             return response.exists ? preset : null;
           } catch (error) {
-            // If content script not loaded, assume preset might be valid
-            console.warn('Could not check form existence:', error);
+            // Content script may not be loaded or tab may be closed
+            // Silently return the preset - it might be valid
             return preset;
           }
         })
       );
-      validPresets = formChecks.filter(p => p !== null);
+      // Extract fulfilled values
+      validPresets = formChecks
+        .filter(result => result.status === 'fulfilled' && result.value !== null)
+        .map(result => result.value);
     }
 
     // Add preset items at top level (no parent, no nesting)
@@ -553,48 +641,67 @@ async function handleMessage(message, sender, sendResponse) {
     switch (message.action) {
       case 'unlock':
         await handleUnlock(message.password, sendResponse);
-        break;
+        return;
         
       case 'createNewCollection':
         await handleCreateNewCollection(message.password, sendResponse);
-        break;
+        return;
         
       case 'isUnlocked':
-        sendResponse({ unlocked: encryptionKey !== null });
-        break;
+        // Check if we have encryption key in memory
+        const hasKey = encryptionKey !== null;
+        
+        // Check if session says we should be unlocked
+        const sessionState = await chrome.storage.session.get(['isUnlocked', 'unlockedAt']);
+        const sessionUnlocked = sessionState.isUnlocked === true;
+        
+        if (sessionUnlocked && !hasKey) {
+          // Service worker restarted and lost the key, but session says we were unlocked
+          console.log('[IS_UNLOCKED] Session unlocked but key lost - need to re-unlock');
+          sendResponse({ 
+            unlocked: false, 
+            needsReunlock: true,
+            lastUnlockedAt: sessionState.unlockedAt 
+          });
+        } else {
+          sendResponse({ unlocked: hasKey });
+        }
+        return;
         
       case 'lock':
         encryptionKey = null;
+        await chrome.storage.session.remove(['isUnlocked', 'unlockedAt']); // Clear session unlock state
+        stopKeepAlive(); // Stop keeping service worker alive
         presetMenuItems.clear();
         await createContextMenus(); // Reset context menus
         sendResponse({ success: true });
-        break;
+        return;
         
       case 'encrypt':
         const encrypted = await encryptData(message.data);
         sendResponse({ encrypted });
-        break;
+        return;
         
       case 'decrypt':
         const decrypted = await decryptData(message.data);
         sendResponse({ decrypted });
-        break;
+        return;
         
       case 'savePreset':
         await handleSavePresetMessage(message.preset, sendResponse);
-        break;
+        return;
         
       case 'getPresetsForPage':
         await handleGetPresetsForPage(message.url, sendResponse);
-        break;
+        return;
         
       case 'toggleDomainEnabled':
         await handleToggleDomainEnabled(message.domain, sendResponse);
-        break;
+        return;
         
       case 'isDomainEnabled':
         await handleIsDomainEnabled(message.domain, sendResponse);
-        break;
+        return;
         
       case 'triggerSavePreset':
         // Delegate to the existing handleSavePreset logic
@@ -603,13 +710,14 @@ async function handleMessage(message, sender, sendResponse) {
           await handleSavePreset(tab);
           sendResponse({ success: true });
         });
-        break;
+        return;
         
       default:
         sendResponse({ error: 'Unknown action' });
     }
   } catch (error) {
-    console.error('Error handling message:', error);
+    console.error('[MESSAGE_HANDLER] Error handling message:', error);
+    console.error('[MESSAGE_HANDLER] Error stack:', error.stack);
     sendResponse({ error: error.message });
   }
 }
@@ -683,6 +791,12 @@ async function handleUnlock(password, sendResponse) {
     
     // Set the encryption key
     encryptionKey = key;
+    
+    // Store unlock state in session storage (survives service worker restarts)
+    await chrome.storage.session.set({ isUnlocked: true, unlockedAt: Date.now() });
+    
+    // Start keep-alive to prevent service worker from sleeping
+    startKeepAlive();
     
     console.log('[UNLOCK] Extension unlocked successfully');
     
@@ -768,6 +882,12 @@ async function handleCreateNewCollection(password, sendResponse) {
     // Set the encryption key
     encryptionKey = key;
     
+    // Store unlock state in session storage
+    await chrome.storage.session.set({ isUnlocked: true, unlockedAt: Date.now() });
+    
+    // Start keep-alive to prevent service worker from sleeping
+    startKeepAlive();
+    
     console.log('[CREATE_COLLECTION] New collection created successfully!');
     
     // Send success response immediately
@@ -816,11 +936,14 @@ async function handleSavePresetMessage(presetData, sendResponse) {
       id: crypto.randomUUID(),
       name: presetData.name,
       formSelector: presetData.formSelector,
+      formUrl: presetData.formUrl, // Store the exact form URL
       fields: presetData.fields,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       useCount: 0
     };
+    
+    console.log('[SAVE_PRESET] Saving preset with formUrl:', preset.formUrl);
 
     // Encrypt the fields
     const encryptedFields = await encryptData(preset.fields);

@@ -1175,6 +1175,7 @@ function showSaveModal(formData) {
           name: name,
           scopeType: scope,
           scopeValue: scope === 'domain' ? pageInfo.domain : pageInfo.url,
+          formUrl: pageInfo.url, // Always send the actual form URL
           formSelector: formData.selector,
           fields: filteredData
         }
