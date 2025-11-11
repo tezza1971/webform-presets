@@ -18,6 +18,17 @@ document.addEventListener('DOMContentLoaded', async () => {
  * Initialize the options page
  */
 async function initialize() {
+  // Check JSZip library availability
+  console.log('[INIT] Checking JSZip library...');
+  if (typeof JSZip !== 'undefined') {
+    console.log('[INIT] ✓ JSZip loaded successfully, version:', JSZip.version || 'unknown');
+  } else {
+    console.error('[INIT] ✗ JSZip library not loaded!');
+    console.error('[INIT] Export functionality will not work');
+    console.error('[INIT] Check options.html for JSZip script tag');
+    console.error('[INIT] Check browser console for CSP violations or network errors');
+  }
+  
   // Update sync service status
   updateSyncStatus();
   
@@ -193,17 +204,26 @@ function handleExport() {
 async function handleExportConfirm() {
   const exportType = document.querySelector('input[name="export-type"]:checked').value;
   
+  console.log('[EXPORT] Starting export, type:', exportType);
+  console.log('[EXPORT] JSZip available:', typeof JSZip !== 'undefined');
+  
   // Hide dialog
   document.getElementById('export-dialog').style.display = 'none';
   
+  // Show notification that export is starting
+  showNotification('Info', 'Preparing export...', 'info');
+  
   try {
     if (exportType === 'current') {
+      console.log('[EXPORT] Exporting current collection');
       await exportCurrentCollection();
     } else {
+      console.log('[EXPORT] Exporting all collections');
       await exportAllCollections();
     }
   } catch (error) {
-    console.error('Export error:', error);
+    console.error('[EXPORT] Export error:', error);
+    console.error('[EXPORT] Error stack:', error.stack);
     showNotification('Error', 'Failed to export: ' + error.message, 'error');
   }
 }
@@ -220,6 +240,7 @@ function handleExportCancel() {
  */
 async function exportCurrentCollection() {
   try {
+    console.log('[EXPORT] Starting export current collection...');
     const manifest = chrome.runtime.getManifest();
     const exportData = {
       version: manifest.version,
@@ -229,42 +250,62 @@ async function exportCurrentCollection() {
       collections: []
     };
     
-    // Get current collection data
-    const currentPresets = {};
-    for (const scope of allPresets) {
-      for (const preset of scope.presets) {
-        const key = `preset_${scope.domain}_${preset.name}`;
-        const stored = await chrome.storage.local.get(key);
-        if (stored[key]) {
-          currentPresets[key] = stored[key];
+    // Get all storage data
+    const allData = await chrome.storage.local.get(null);
+    
+    // Collect all scope data (domain:xxx or url:xxx keys)
+    const scopeData = {};
+    const domains = new Set();
+    let presetCount = 0;
+    
+    for (const [key, value] of Object.entries(allData)) {
+      // Skip system keys
+      if (key === 'userSalt' || key === 'verificationToken' || key.startsWith('verificationToken_') || key === 'disabledDomains') {
+        continue;
+      }
+      
+      // Check if this is scope data (has presets array)
+      if (value && value.presets && Array.isArray(value.presets)) {
+        console.log('[EXPORT] Found scope:', key, 'with', value.presets.length, 'presets');
+        scopeData[key] = value;
+        presetCount += value.presets.length;
+        
+        // Extract domain/url for metadata
+        const [scopeType, ...valueParts] = key.split(':');
+        const scopeValue = valueParts.join(':');
+        if (scopeType === 'domain') {
+          domains.add(scopeValue);
+        } else if (scopeType === 'url') {
+          try {
+            const urlObj = new URL(scopeValue);
+            domains.add(urlObj.hostname);
+          } catch (e) {
+            // Invalid URL, skip
+          }
         }
       }
     }
     
-    // Get verification token for current collection
-    const result = await chrome.storage.local.get(['verificationToken', 'userSalt']);
-    
-    const domains = new Set();
-    for (const scope of allPresets) {
-      domains.add(scope.domain);
-    }
+    console.log('[EXPORT] Found', presetCount, 'presets across', Object.keys(scopeData).length, 'scopes');
     
     exportData.collections.push({
       name: 'Current Collection',
+      verificationToken: allData.verificationToken,
+      userSalt: allData.userSalt,
+      encryptedData: scopeData,
       metadata: {
-        presetCount: Object.keys(currentPresets).length,
+        presetCount: presetCount,
         domains: Array.from(domains),
+        scopeCount: Object.keys(scopeData).length,
         exportDate: new Date().toISOString()
-      },
-      encryptedData: currentPresets,
-      verificationToken: result.verificationToken,
-      userSalt: result.userSalt
+      }
     });
     
     await createAndDownloadZip(exportData, 'current');
     
   } catch (error) {
-    console.error('Export current error:', error);
+    console.error('[EXPORT] Export current error:', error);
+    console.error('[EXPORT] Error stack:', error.stack);
     throw error;
   }
 }
@@ -274,6 +315,7 @@ async function exportCurrentCollection() {
  */
 async function exportAllCollections() {
   try {
+    console.log('[EXPORT] Starting export all collections...');
     const manifest = chrome.runtime.getManifest();
     const exportData = {
       version: manifest.version,
@@ -285,88 +327,68 @@ async function exportAllCollections() {
     
     // Get all storage data
     const allData = await chrome.storage.local.get(null);
+    console.log('[EXPORT] All storage keys:', Object.keys(allData));
     
-    // Identify all collections by verification tokens
-    const collections = {};
-    const sharedData = {
-      userSalt: allData.userSalt
-    };
+    // Collect all scope data (domain:xxx or url:xxx keys)
+    const scopeData = {};
+    const domains = new Set();
+    let presetCount = 0;
     
-    // Group data by collection
-    for (const key in allData) {
-      if (key.startsWith('verificationToken_')) {
-        const collectionId = key.replace('verificationToken_', '');
-        collections[collectionId] = {
-          name: `Collection ${Object.keys(collections).length + 1}`,
-          verificationToken: allData[key],
-          encryptedData: {},
-          metadata: {
-            domains: [],
-            presetCount: 0
+    for (const [key, value] of Object.entries(allData)) {
+      // Skip system keys
+      if (key === 'userSalt' || key === 'verificationToken' || key.startsWith('verificationToken_') || key === 'disabledDomains') {
+        continue;
+      }
+      
+      // Check if this is scope data (has presets array)
+      if (value && value.presets && Array.isArray(value.presets)) {
+        console.log('[EXPORT] Found scope:', key, 'with', value.presets.length, 'presets');
+        scopeData[key] = value;
+        presetCount += value.presets.length;
+        
+        // Extract domain/url for metadata
+        const [scopeType, ...valueParts] = key.split(':');
+        const scopeValue = valueParts.join(':');
+        if (scopeType === 'domain') {
+          domains.add(scopeValue);
+        } else if (scopeType === 'url') {
+          try {
+            const urlObj = new URL(scopeValue);
+            domains.add(urlObj.hostname);
+          } catch (e) {
+            // Invalid URL, skip
           }
-        };
-      } else if (key.startsWith('preset_')) {
-        // Add to first collection for now (will be properly associated in a real implementation)
-        const firstCollection = Object.keys(collections)[0];
-        if (firstCollection) {
-          collections[firstCollection].encryptedData[key] = allData[key];
         }
       }
     }
     
-    // If no separate collections found, treat as single collection
-    if (Object.keys(collections).length === 0 && allData.verificationToken) {
-      const presets = {};
-      const domains = new Set();
-      
-      for (const key in allData) {
-        if (key.startsWith('preset_')) {
-          presets[key] = allData[key];
-          // Extract domain from key
-          const parts = key.split('_');
-          if (parts.length >= 2) {
-            domains.add(parts[1]);
-          }
-        }
+    console.log('[EXPORT] Found', presetCount, 'presets across', Object.keys(scopeData).length, 'scopes');
+    
+    // Create single collection with all data
+    exportData.collections.push({
+      name: 'Main Collection',
+      verificationToken: allData.verificationToken,
+      userSalt: allData.userSalt,
+      encryptedData: scopeData,
+      metadata: {
+        domains: Array.from(domains),
+        presetCount: presetCount,
+        scopeCount: Object.keys(scopeData).length,
+        exportDate: new Date().toISOString()
       }
-      
-      exportData.collections.push({
-        name: 'Main Collection',
-        verificationToken: allData.verificationToken,
-        userSalt: allData.userSalt,
-        encryptedData: presets,
-        metadata: {
-          domains: Array.from(domains),
-          presetCount: Object.keys(presets).length,
-          exportDate: new Date().toISOString()
-        }
-      });
-    } else {
-      // Add each collection
-      for (const collectionId in collections) {
-        const collection = collections[collectionId];
-        const domains = new Set();
-        
-        for (const key in collection.encryptedData) {
-          const parts = key.split('_');
-          if (parts.length >= 2) {
-            domains.add(parts[1]);
-          }
-        }
-        
-        collection.metadata.domains = Array.from(domains);
-        collection.metadata.presetCount = Object.keys(collection.encryptedData).length;
-        collection.metadata.exportDate = new Date().toISOString();
-        collection.userSalt = sharedData.userSalt;
-        
-        exportData.collections.push(collection);
-      }
-    }
+    });
+    
+    console.log('[EXPORT] Export data prepared:', {
+      collections: exportData.collections.length,
+      presets: presetCount,
+      domains: domains.size
+    });
     
     await createAndDownloadZip(exportData, 'all');
     
   } catch (error) {
-    console.error('Export all error:', error);
+    console.error('[EXPORT] Export all error:', error);
+    console.error('[EXPORT] Error stack:', error.stack);
     throw error;
   }
 }
@@ -375,27 +397,49 @@ async function exportAllCollections() {
  * Create ZIP file and trigger download
  */
 async function createAndDownloadZip(exportData, type) {
+  console.log('[EXPORT] Creating ZIP for type:', type);
+  console.log('[EXPORT] Checking JSZip availability...');
+  
   try {
     if (typeof JSZip === 'undefined') {
-      throw new Error('JSZip library not loaded');
+      const errorMsg = 'JSZip library not loaded. Check console for CSP issues or network errors.';
+      console.error('[EXPORT] CRITICAL:', errorMsg);
+      console.error('[EXPORT] Verify JSZip script tag in options.html');
+      console.error('[EXPORT] Check browser console for CSP violations');
+      throw new Error(errorMsg);
     }
     
+    console.log('[EXPORT] JSZip version:', JSZip.version || 'unknown');
+    console.log('[EXPORT] Export data:', {
+      type: exportData.exportType,
+      version: exportData.version,
+      collections: exportData.collections.length
+    });
+    
+    console.log('[EXPORT] Initializing ZIP archive...');
     const zip = new JSZip();
     
     // Create JSON data string
+    console.log('[EXPORT] Stringifying export data...');
     const jsonData = JSON.stringify(exportData, null, 2);
+    console.log('[EXPORT] JSON data size:', jsonData.length, 'bytes');
     
     // Verify JSON integrity
+    console.log('[EXPORT] Verifying JSON integrity...');
     try {
       JSON.parse(jsonData);
+      console.log('[EXPORT] JSON integrity check passed');
     } catch (e) {
+      console.error('[EXPORT] JSON integrity check failed:', e);
       throw new Error('Data integrity check failed - invalid JSON');
     }
     
     // Add JSON file to ZIP
+    console.log('[EXPORT] Adding webform-presets-export.json to archive...');
     zip.file('webform-presets-export.json', jsonData);
     
     // Add README
+    console.log('[EXPORT] Creating README.txt...');
     const readme = `Webform Presets Export
 ======================
 
@@ -417,28 +461,42 @@ Note: Passwords are not included in this export for security reasons.
 You must remember your collection password(s) to import this data.
 `;
     
+    console.log('[EXPORT] Adding README.txt to archive...');
     zip.file('README.txt', readme);
     
     // Generate ZIP blob
+    console.log('[EXPORT] Generating ZIP blob with DEFLATE compression level 9...');
     const zipBlob = await zip.generateAsync({
       type: 'blob',
       compression: 'DEFLATE',
       compressionOptions: { level: 9 }
     });
     
+    console.log('[EXPORT] ZIP blob generated, size:', zipBlob.size, 'bytes');
+    console.log('[EXPORT] Compression ratio:', ((1 - zipBlob.size / jsonData.length) * 100).toFixed(2) + '%');
+    
     // Create download
+    console.log('[EXPORT] Creating download link...');
     const url = URL.createObjectURL(zipBlob);
     const a = document.createElement('a');
     a.href = url;
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
     a.download = `webform-presets-${type}-${timestamp}.zip`;
+    
+    console.log('[EXPORT] Triggering download:', a.download);
     a.click();
     URL.revokeObjectURL(url);
     
+    console.log('[EXPORT] Export completed successfully');
     showNotification('Success', `Exported ${exportData.collections.length} collection(s) successfully`, 'success');
     
   } catch (error) {
-    console.error('ZIP creation error:', error);
+    console.error('[EXPORT] ZIP creation error:', error);
+    console.error('[EXPORT] Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
     throw new Error('Failed to create ZIP file: ' + error.message);
   }
 }
@@ -457,17 +515,22 @@ async function handleFileSelect(event) {
   const file = event.target.files[0];
   if (!file) return;
   
+  console.log('[IMPORT] File selected:', file.name, 'size:', file.size, 'bytes');
+  
   try {
     // Determine if it's a ZIP or JSON file
     if (file.name.endsWith('.zip')) {
+      console.log('[IMPORT] Detected ZIP file');
       await handleZipImport(file);
     } else if (file.name.endsWith('.json')) {
+      console.log('[IMPORT] Detected JSON file');
       await handleJsonImport(file);
     } else {
       throw new Error('Unsupported file format. Please use .zip or .json files.');
     }
   } catch (error) {
-    console.error('Import error:', error);
+    console.error('[IMPORT] Import error:', error);
+    console.error('[IMPORT] Error stack:', error.stack);
     showNotification('Error', 'Failed to import: ' + error.message, 'error');
   }
   
@@ -480,27 +543,39 @@ async function handleFileSelect(event) {
  */
 async function handleZipImport(file) {
   try {
+    console.log('[IMPORT] Checking JSZip availability...');
     if (typeof JSZip === 'undefined') {
       throw new Error('JSZip library not loaded');
     }
     
+    console.log('[IMPORT] Loading ZIP file...');
     const zip = await JSZip.loadAsync(file);
+    console.log('[IMPORT] ZIP loaded, files:', Object.keys(zip.files));
     
     // Look for the JSON file
     const jsonFile = zip.file('webform-presets-export.json');
     if (!jsonFile) {
+      console.error('[IMPORT] JSON file not found in ZIP');
       throw new Error('Invalid export file - missing data file');
     }
     
+    console.log('[IMPORT] Extracting JSON data...');
     // Extract and parse JSON
     const jsonText = await jsonFile.async('text');
+    console.log('[IMPORT] JSON text length:', jsonText.length, 'bytes');
+    
     const importData = JSON.parse(jsonText);
+    console.log('[IMPORT] Parsed import data:', {
+      version: importData.version,
+      exportType: importData.exportType,
+      collections: importData.collections?.length
+    });
     
     // Validate import data
     await validateAndImport(importData);
     
   } catch (error) {
-    console.error('ZIP import error:', error);
+    console.error('[IMPORT] ZIP import error:', error);
     throw error;
   }
 }
@@ -532,12 +607,14 @@ async function handleJsonImport(file) {
  * Validate and import data
  */
 async function validateAndImport(importData) {
+  console.log('[IMPORT] Validating import data...');
+  
   // Version check
   const manifest = chrome.runtime.getManifest();
   const importVersion = importData.version;
   const currentVersion = manifest.version;
   
-  console.log(`Importing from version ${importVersion} into version ${currentVersion}`);
+  console.log(`[IMPORT] Importing from version ${importVersion} into version ${currentVersion}`);
   
   // Validate structure
   if (!importData.collections || !Array.isArray(importData.collections)) {
@@ -547,6 +624,19 @@ async function validateAndImport(importData) {
   if (importData.collections.length === 0) {
     throw new Error('Export file contains no collections');
   }
+  
+  console.log('[IMPORT] Collections found:', importData.collections.length);
+  
+  // Log collection details
+  importData.collections.forEach((collection, i) => {
+    console.log(`[IMPORT] Collection ${i + 1}:`, {
+      name: collection.name,
+      presetCount: collection.metadata?.presetCount,
+      domains: collection.metadata?.domains,
+      scopeCount: collection.metadata?.scopeCount,
+      encryptedDataKeys: Object.keys(collection.encryptedData || {})
+    });
+  });
   
   // Version compatibility check
   const importMajor = parseInt(importVersion.split('.')[0]);
@@ -566,32 +656,46 @@ async function validateAndImport(importData) {
   // TODO: Replace with non-modal confirmation dialog
   const confirmed = confirm('⚠️ WARNING ⚠️\n\n' + message);
   
-  if (!confirmed) return;
+  if (!confirmed) {
+    console.log('[IMPORT] Import cancelled by user');
+    return;
+  }
+  
+  console.log('[IMPORT] Starting import process...');
   
   // Import collections
+  console.log('[IMPORT] Clearing existing storage...');
   await chrome.storage.local.clear();
   
   for (const collection of importData.collections) {
+    console.log('[IMPORT] Importing collection:', collection.name);
+    
     // Import verification token
     if (collection.verificationToken) {
+      console.log('[IMPORT] Setting verification token');
       await chrome.storage.local.set({ verificationToken: collection.verificationToken });
     }
     
     // Import user salt
     if (collection.userSalt) {
+      console.log('[IMPORT] Setting user salt');
       await chrome.storage.local.set({ userSalt: collection.userSalt });
     }
     
     // Import encrypted data
     if (collection.encryptedData) {
+      const keys = Object.keys(collection.encryptedData);
+      console.log('[IMPORT] Importing', keys.length, 'scope data entries:', keys);
       await chrome.storage.local.set(collection.encryptedData);
     }
   }
   
+  console.log('[IMPORT] Import completed successfully');
   showNotification('Success', `Imported ${importData.collections.length} collection(s)`, 'success');
   
   // Reload to unlock page (user needs to enter password)
   setTimeout(() => {
+    console.log('[IMPORT] Reloading page...');
     window.location.reload();
   }, 1500);
 }
@@ -736,9 +840,12 @@ async function updateStatistics() {
  * Display presets in the UI
  */
 function displayPresets(scopes) {
+  console.log('[DISPLAY] Displaying', scopes.length, 'scopes');
+  
   const container = document.getElementById('presets-container');
   
   if (scopes.length === 0) {
+    console.log('[DISPLAY] No scopes to display');
     container.innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">📋</div>
@@ -751,24 +858,55 @@ function displayPresets(scopes) {
   
   container.innerHTML = '';
   
-  scopes.forEach(scope => {
+  scopes.forEach((scope, index) => {
+    console.log('[DISPLAY] Creating scope element', index, 'for:', scope.scopeKey);
     const scopeEl = createScopeElement(scope);
     container.appendChild(scopeEl);
   });
+  
+  console.log('[DISPLAY] All scope elements appended to container');
 }
 
 /**
  * Create a scope element
  */
 function createScopeElement(scope) {
+  console.log('[SCOPE_CREATE] Creating scope element:', {
+    scopeKey: scope.scopeKey,
+    scopeType: scope.scopeType,
+    presetCount: scope.presets?.length
+  });
+  
   const div = document.createElement('div');
   div.className = 'scope-item';
   
-  const [scopeType, scopeValue] = scope.scopeKey.split(':', 2);
+  const [scopeType, ...scopeValueParts] = scope.scopeKey.split(':');
+  const scopeValue = scopeValueParts.join(':'); // Rejoin in case URL has colons
   const icon = scopeType === 'domain' ? '🌐' : '🔗';
   
+  // Get the form URL from the first preset (all presets in a scope should have the same form URL)
+  let formUrl = '';
+  if (scope.presets && scope.presets.length > 0 && scope.presets[0].formUrl) {
+    formUrl = scope.presets[0].formUrl;
+    console.log('[SCOPE_CREATE] Form URL from first preset:', formUrl);
+  } else {
+    // Fallback to constructing URL from scope
+    formUrl = scopeType === 'url' ? scopeValue : `https://${scopeValue}`;
+    console.log('[SCOPE_CREATE] Form URL fallback:', formUrl);
+  }
+  
+  const targetName = `wfp-scope-${scopeType}-${encodeURIComponent(scopeValue)}`;
+  
+  console.log('[SCOPE_CREATE] Parsed scope:', {
+    scopeType: scopeType,
+    scopeValue: scopeValue,
+    icon: icon,
+    formUrl: formUrl,
+    targetName: targetName
+  });
+  
   div.innerHTML = `
-    <div class="scope-header">
+    <div class="scope-header scope-clickable" data-url="${escapeHtml(formUrl)}" data-target="${escapeHtml(targetName)}" style="cursor: pointer;">
       <div class="scope-info">
         <span class="scope-icon">${icon}</span>
         <span class="scope-name">${escapeHtml(scopeValue)}</span>
@@ -785,20 +923,53 @@ function createScopeElement(scope) {
   `;
   
   // Add event listeners
-  div.querySelector('.expand-btn').addEventListener('click', () => {
+  const scopeHeader = div.querySelector('.scope-header');
+  const expandBtn = div.querySelector('.expand-btn');
+  const deleteScopeBtn = div.querySelector('.delete-scope-btn');
+  
+  // Handle scope header click to open form URL
+  scopeHeader.addEventListener('click', (e) => {
+    // Don't open if clicking on buttons
+    if (e.target.classList.contains('expand-btn') || 
+        e.target.classList.contains('delete-scope-btn') ||
+        e.target.closest('.scope-actions')) {
+      console.log('[SCOPE_CLICK] Click was on action button, ignoring');
+      return;
+    }
+    
+    const url = scopeHeader.dataset.url;
+    const target = scopeHeader.dataset.target;
+    console.log('[SCOPE_CLICK] Opening form URL:', url, 'in target:', target);
+    
+    try {
+      const newWindow = window.open(url, target);
+      console.log('[SCOPE_CLICK] Window.open returned:', newWindow);
+    } catch (error) {
+      console.error('[SCOPE_CLICK] Error opening window:', error);
+    }
+  });
+  
+  // Handle expand/collapse
+  expandBtn.addEventListener('click', (e) => {
+    e.stopPropagation(); // Don't trigger scope header click
     div.classList.toggle('expanded');
   });
   
-  div.querySelector('.delete-scope-btn').addEventListener('click', (e) => {
-    handleDeleteScope(e.target.dataset.scope);
+  // Handle delete scope
+  deleteScopeBtn.addEventListener('click', (e) => {
+    e.stopPropagation(); // Don't trigger scope header click
+    handleDeleteScope(deleteScopeBtn.dataset.scope);
   });
   
-  // Add event listeners for preset actions
+  // Add event listeners for preset actions (just delete buttons now)
   div.querySelectorAll('.delete-preset-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
+      e.stopPropagation(); // Prevent any parent clicks
       handleDeletePreset(e.target.dataset.scope, e.target.dataset.id);
     });
   });
+  
+  console.log('[SCOPE_CREATE] Scope element created with', scope.presets.length, 'presets');
   
   return div;
 }
@@ -808,6 +979,17 @@ function createScopeElement(scope) {
  */
 function createPresetHTML(preset, scopeKey) {
   const createdDate = new Date(preset.createdAt).toLocaleDateString();
+  
+  // Extract scope type and value from scopeKey (format: "type:value")
+  const [scopeType, ...valueParts] = scopeKey.split(':');
+  const scopeValue = valueParts.join(':'); // Rejoin in case URL has colons
+  
+  console.log('[PRESET_HTML] Creating preset:', {
+    name: preset.name,
+    id: preset.id,
+    scopeKey: scopeKey,
+    formUrl: preset.formUrl
+  });
   
   return `
     <div class="preset-item">
