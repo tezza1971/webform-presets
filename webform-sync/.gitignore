@@ -1,0 +1,45 @@
+# Binaries
+webform-sync
+webform-sync.exe
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Build artifacts
+build/
+dist/
+*.test
+
+# Database
+data/*.db
+data/*.db-shm
+data/*.db-wal
+*.db
+*.db-shm
+*.db-wal
+
+# Logs
+logs/*.log
+*.log
+
+# Go
+*.out
+coverage.out
+vendor/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Config (if contains sensitive data)
+# webform-sync.yml  # Uncomment if you put tokens in config
+
+# Temporary files
+*.tmp
+*.bak
+tmp/

@@ -1,0 +1,16 @@
+# Blacklist - Blocked domains for storing form data
+# One pattern per line
+# Supports regex patterns (when use_regex: true in config)
+# Whitelist entries override blacklist
+
+# Examples:
+# Block specific domain:
+# malicious-site.com
+
+# Block all .ru domains (regex):
+# ^.*\.ru$
+
+# Block suspicious patterns (regex):
+# ^.*phishing.*$
+
+# Add your blocked domains/patterns below:

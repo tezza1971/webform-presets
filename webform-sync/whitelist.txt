@@ -1,0 +1,24 @@
+# Whitelist - Allowed domains for storing form data
+# One pattern per line
+# Supports regex patterns (when use_regex: true in config)
+# Whitelist overrides blacklist
+
+# Examples:
+# Exact domain match:
+# example.com
+
+# Subdomain wildcard (regex):
+# ^.*\.example\.com$
+
+# Multiple related domains (regex):
+# ^(localhost|127\.0\.0\.1|192\.168\..*)$
+
+# Default: Allow localhost for testing
+^(localhost|127\.0\.0\.1).*$
+
+# Allow GitHub
+^https://github\.com/.*$
+
+# Allow example.com for testing
+^https://example\.com/.*$
+example\.com

@@ -1,0 +1,178 @@
+# Webform Sync Service Configuration
+# Version: 1.0.0
+
+# Server configuration
+server:
+  # Port to listen on (default: 8765)
+  port: 8765
+  
+  # Alternative ports to try if primary is in use
+  fallback_ports:
+    - 8766
+    - 8767
+    - 8768
+  
+  # Host to bind to (0.0.0.0 for all interfaces, 127.0.0.1 for localhost only)
+  host: "0.0.0.0"
+  
+  # Read timeout in seconds
+  read_timeout: 10
+  
+  # Write timeout in seconds
+  write_timeout: 10
+
+# Access control - IP address restrictions
+access_control:
+  # Mode: whitelist, blacklist, or allow_all
+  # - whitelist: Only IPs/ranges in whitelist are allowed
+  # - blacklist: All IPs except those in blacklist are allowed
+  # - allow_all: No IP restrictions (not recommended for production)
+  mode: "whitelist"
+  
+  # IP ranges and addresses allowed (CIDR notation or single IPs)
+  # Examples:
+  #   - "127.0.0.1"          (localhost only)
+  #   - "192.168.1.0/24"     (entire subnet)
+  #   - "10.0.0.50"          (specific IP)
+  #   - "::1"                (IPv6 localhost)
+  whitelist:
+    - "127.0.0.1"
+    - "::1"
+    - "172.17.0.0/16"  # Docker bridge network
+    - "192.168.0.0/16"  # Common local networks
+  
+  # IP ranges and addresses to block
+  blacklist:
+    # Example: Block specific troublesome IPs
+    # - "192.168.1.100"
+
+# URL filtering - Control which domains can store data
+url_filter:
+  # Enable URL filtering
+  enabled: true
+  
+  # Path to whitelist file (one domain/URL pattern per line)
+  whitelist_file: "whitelist.txt"
+  
+  # Path to blacklist file (one domain/URL pattern per line)
+  blacklist_file: "blacklist.txt"
+  
+  # Use regex patterns in filter files (if false, uses simple glob patterns)
+  use_regex: true
+  
+  # Whitelist overrides blacklist
+  whitelist_overrides: true
+
+# Storage configuration
+storage:
+  # Directory to store preset data
+  data_dir: "./data"
+  
+  # Database file name
+  db_file: "presets.db"
+  
+  # Enable encryption at rest
+  encrypt_at_rest: false
+  
+  # Encryption key (only used if encrypt_at_rest is true)
+  # Leave empty to generate a random key on first run
+  encryption_key: ""
+  
+  # Backup configuration
+  backup:
+    enabled: true
+    interval_hours: 24
+    max_backups: 7
+    backup_dir: "./backups"
+
+# Logging configuration
+logging:
+  # Log level: debug, info, warn, error
+  level: "info"
+  
+  # Log output: console, file, or both
+  output: "both"
+  
+  # Log file path (only used if output is file or both)
+  log_file: "./logs/webform-sync.log"
+  
+  # Maximum log file size in MB before rotation
+  max_size_mb: 10
+  
+  # Maximum number of old log files to keep
+  max_backups: 5
+  
+  # Maximum age in days to keep log files
+  max_age_days: 30
+  
+  # Enable request logging (logs all HTTP requests)
+  log_requests: true
+
+# CORS configuration (for browser extensions)
+cors:
+  # Enable CORS
+  enabled: true
+  
+  # Allowed origins (use * for all, or specify extension IDs)
+  allowed_origins:
+    - "*"  # Allow all origins (safe for localhost-only services)
+  
+  # Allowed methods
+  allowed_methods:
+    - "GET"
+    - "POST"
+    - "PUT"
+    - "DELETE"
+    - "OPTIONS"
+  
+  # Allowed headers
+  allowed_headers:
+    - "Content-Type"
+    - "Authorization"
+  
+  # Max age for preflight requests (in seconds)
+  max_age: 3600
+
+# Authentication (optional - for added security)
+authentication:
+  # Enable authentication
+  enabled: false
+  
+  # Authentication type: token, basic, or none
+  type: "token"
+  
+  # API token (only used if type is token)
+  # Generate a secure random token and configure in browser extension
+  api_token: ""
+  
+  # Basic auth credentials (only used if type is basic)
+  username: ""
+  password: ""
+
+# Performance tuning
+performance:
+  # Maximum concurrent requests
+  max_concurrent_requests: 100
+  
+  # Request rate limiting (requests per minute per IP)
+  rate_limit: 60
+  
+  # Enable gzip compression
+  enable_compression: true
+  
+  # Cache settings
+  cache:
+    enabled: true
+    ttl_seconds: 300
+    max_entries: 1000
+
+# Maintenance
+maintenance:
+  # Enable automatic cleanup of old/unused data
+  auto_cleanup: true
+  
+  # Delete presets not accessed in X days (0 = never delete)
+  delete_after_days: 365
+  
+  # Run cleanup every X hours
+  cleanup_interval_hours: 168  # Once per week
