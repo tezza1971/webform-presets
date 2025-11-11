@@ -10,21 +10,22 @@
   <div class="unlock-container">
     <div class="unlock-card">
       <div class="lock-icon-large">🔐</div>
-      <h1>Unlock Webform Presets</h1>
-      <p class="subtitle">Enter your master password to access your presets</p>
+      <h1 id="page-title">Unlock Webform Presets</h1>
+      <p id="page-subtitle" class="subtitle">Enter your collection password to access your presets</p>
       
       <form id="unlock-form">
         <div class="form-group">
-          <label for="master-password">Master Password</label>
+          <label for="master-password" id="password-label">Collection Password</label>
           <input 
             type="password" 
             id="master-password" 
             name="master-password"
             autocomplete="current-password"
-            placeholder="Enter your master password"
+            placeholder="Enter your collection password"
             required
             autofocus
           >
+          <p id="password-help" class="field-help" style="display: none;"></p>
         </div>
         
         <div class="sync-config">
@@ -32,38 +33,49 @@
             <span class="config-icon">🔄</span>
             <span>Sync Service Configuration</span>
           </div>
-          <div class="form-row">
-            <div class="form-group form-group-inline">
-              <label for="sync-host">Host</label>
-              <input 
-                type="text" 
-                id="sync-host" 
-                name="sync-host"
-                placeholder="localhost"
-                value="localhost"
-              >
-            </div>
-            <div class="form-group form-group-inline">
-              <label for="sync-port">Port</label>
-              <input 
-                type="number" 
-                id="sync-port" 
-                name="sync-port"
-                placeholder="8765"
-                value="8765"
-                min="1"
-                max="65535"
-              >
-            </div>
+          
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="local-only-mode" name="local-only-mode">
+              <span>💾 Local-only mode (don't use sync server)</span>
+            </label>
+            <p class="config-help">Save presets to this browser only. Use import/export to move data between browsers.</p>
           </div>
-          <button type="button" id="test-connection-btn" class="test-btn">
-            Test Connection
-          </button>
-          <div id="connection-status" class="connection-status" style="display: none;"></div>
-          <p class="config-help">Configure your local webform-sync service connection</p>
-          <p class="config-help">
-            📖 <a href="https://github.com/tezza1971/webform-presets/blob/main/webform-sync/README.md" target="_blank" class="help-link">View Setup Guide</a>
-          </p>
+          
+          <div id="sync-server-config" class="sync-server-config">
+            <div class="form-row">
+              <div class="form-group form-group-inline">
+                <label for="sync-host">Host</label>
+                <input 
+                  type="text" 
+                  id="sync-host" 
+                  name="sync-host"
+                  placeholder="localhost"
+                  value="localhost"
+                >
+              </div>
+              <div class="form-group form-group-inline">
+                <label for="sync-port">Port</label>
+                <input 
+                  type="number" 
+                  id="sync-port" 
+                  name="sync-port"
+                  placeholder="8765"
+                  value="8765"
+                  min="1"
+                  max="65535"
+                >
+              </div>
+            </div>
+            <button type="button" id="test-connection-btn" class="test-btn">
+              Test Connection
+            </button>
+            <div id="connection-status" class="connection-status" style="display: none;"></div>
+            <p class="config-help">Configure your local webform-sync service connection</p>
+            <p class="config-help">
+              📖 <a href="https://github.com/tezza1971/webform-presets/blob/main/webform-sync/README.md" target="_blank" class="help-link">View Setup Guide</a>
+            </p>
+          </div>
         </div>
         
         <div id="error-message" class="error-message" style="display: none;"></div>
@@ -73,13 +85,21 @@
         </button>
       </form>
       
-      <div class="help-text">
-        <p>💡 Your password manager should auto-fill this field</p>
-        <p class="warning">⚠️ If you've forgotten your password, you'll need to reset all data</p>
+      <div class="help-text" id="help-text">
+        <p id="help-main">💡 Your password manager should auto-fill this field</p>
+        <p class="warning" id="help-warning">⚠️ If you've forgotten your password, you can create a new collection</p>
+      </div>
+      
+      <div id="new-collection-prompt" class="new-collection-prompt" style="display: none;">
+        <p class="prompt-text">No preset collection exists for that password. Would you like to:</p>
+        <div class="prompt-buttons">
+          <button type="button" id="create-collection-btn" class="secondary-btn">Create New Collection</button>
+          <button type="button" id="try-again-btn" class="secondary-btn">Try Again</button>
+        </div>
       </div>
       
       <div class="reset-section">
-        <button id="reset-btn" class="danger-btn-link">Reset All Data</button>
+        <button id="reset-btn" class="danger-btn-link">Delete All Collections</button>
       </div>
     </div>
   </div>

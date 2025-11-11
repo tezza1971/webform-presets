@@ -2,8 +2,8 @@
  * Unlock Page Script for Webform Presets Extension
  */
 
-let failedAttempts = 0;
-const MAX_ATTEMPTS = 3;
+// Don't track failed attempts - allow creating new collections
+let currentPassword = '';
 
 // ============================================================================
 // INITIALIZATION
@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupEventListeners();
   checkIfAlreadyUnlocked();
   loadSyncConfig();
+  detectFirstTimeSetup();
 });
 
 /**
@@ -22,6 +23,21 @@ function setupEventListeners() {
   document.getElementById('unlock-form').addEventListener('submit', handleUnlock);
   document.getElementById('reset-btn').addEventListener('click', handleReset);
   document.getElementById('test-connection-btn').addEventListener('click', handleTestConnection);
+  document.getElementById('create-collection-btn')?.addEventListener('click', handleCreateNewCollection);
+  document.getElementById('try-again-btn')?.addEventListener('click', handleTryAgain);
+  document.getElementById('local-only-mode')?.addEventListener('change', handleLocalOnlyToggle);
+}
+
+/**
+ * Handle local-only mode toggle
+ */
+function handleLocalOnlyToggle(event) {
+  const serverConfig = document.getElementById('sync-server-config');
+  if (event.target.checked) {
+    serverConfig.classList.add('hidden');
+  } else {
+    serverConfig.classList.remove('hidden');
+  }
 }
 
 /**
@@ -29,13 +45,20 @@ function setupEventListeners() {
  */
 async function loadSyncConfig() {
   try {
-    const result = await chrome.storage.local.get(['syncHost', 'syncPort']);
+    const result = await chrome.storage.local.get(['syncHost', 'syncPort', 'localOnlyMode']);
     
     if (result.syncHost) {
       document.getElementById('sync-host').value = result.syncHost;
     }
     if (result.syncPort) {
       document.getElementById('sync-port').value = result.syncPort;
+    }
+    
+    // Load local-only mode preference
+    const localOnlyCheckbox = document.getElementById('local-only-mode');
+    if (result.localOnlyMode === true) {
+      localOnlyCheckbox.checked = true;
+      document.getElementById('sync-server-config').classList.add('hidden');
     }
   } catch (error) {
     console.error('Error loading sync config:', error);
@@ -121,6 +144,43 @@ async function checkIfAlreadyUnlocked() {
   }
 }
 
+/**
+ * Detect if this is first-time setup (no password exists yet)
+ */
+async function detectFirstTimeSetup() {
+  try {
+    const result = await chrome.storage.local.get(['verificationToken']);
+    
+    if (!result.verificationToken) {
+      // No password set yet - this is first-time setup
+      document.getElementById('page-title').textContent = 'Create Collection Password';
+      document.getElementById('page-subtitle').textContent = 'Set up your collection password to secure your presets';
+      document.getElementById('password-label').textContent = 'Create Collection Password';
+      document.getElementById('master-password').placeholder = 'Create a strong password';
+      document.getElementById('master-password').setAttribute('autocomplete', 'new-password');
+      document.getElementById('unlock-btn').textContent = 'Create Collection & Unlock';
+      
+      // Show helpful message
+      const helpEl = document.getElementById('password-help');
+      helpEl.textContent = '✨ This will be your collection password. Choose something strong and memorable!';
+      helpEl.className = 'field-help create-mode';
+      helpEl.style.display = 'block';
+      
+      // Update help text
+      document.getElementById('help-main').textContent = '🔐 This password will encrypt and protect all your form presets';
+      document.getElementById('help-warning').textContent = '⚠️ Make sure to save this password in your password manager!';
+    } else {
+      // Password already exists - normal unlock
+      const helpEl = document.getElementById('password-help');
+      helpEl.textContent = '🔓 Enter your existing collection password to unlock';
+      helpEl.className = 'field-help';
+      helpEl.style.display = 'block';
+    }
+  } catch (error) {
+    console.error('Error detecting first-time setup:', error);
+  }
+}
+
 // ============================================================================
 // EVENT HANDLERS
 // ============================================================================
@@ -133,33 +193,45 @@ async function handleUnlock(event) {
   
   const passwordInput = document.getElementById('master-password');
   const password = passwordInput.value;
+  const localOnlyMode = document.getElementById('local-only-mode').checked;
   const syncHost = document.getElementById('sync-host').value || 'localhost';
   const syncPort = document.getElementById('sync-port').value || '8765';
   const unlockBtn = document.getElementById('unlock-btn');
   
   if (!password) {
-    showError('Please enter your master password');
+    showError('Please enter your collection password');
     return;
   }
   
-  // Validate port number
-  const portNum = parseInt(syncPort);
-  if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
-    showError('Please enter a valid port number (1-65535)');
-    return;
+  // Only validate port if not in local-only mode
+  if (!localOnlyMode) {
+    const portNum = parseInt(syncPort);
+    if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
+      showError('Please enter a valid port number (1-65535)');
+      return;
+    }
   }
   
   // Disable form during unlock attempt
   unlockBtn.disabled = true;
   unlockBtn.textContent = 'Unlocking...';
   hideError();
+  hideNewCollectionPrompt();
+  
+  // Store password for potential new collection creation
+  currentPassword = password;
   
   try {
     // Save sync configuration
     await chrome.storage.local.set({
       syncHost: syncHost,
-      syncPort: syncPort
+      syncPort: syncPort,
+      localOnlyMode: localOnlyMode
     });
+    
+    // Check if this is first time setup (no collections exist)
+    const result = await chrome.storage.local.get(['verificationToken']);
+    const isFirstTime = !result.verificationToken;
     
     const response = await chrome.runtime.sendMessage({
       action: 'unlock',
@@ -169,17 +241,40 @@ async function handleUnlock(event) {
     if (response.success) {
       // Success! Show success message and close
       showSuccess();
-      setTimeout(() => {
+      setTimeout(async () => {
+        // Check if we should return to a specific page
+        try {
+          const { unlockReferrer } = await chrome.storage.session.get('unlockReferrer');
+          
+          if (unlockReferrer && !unlockReferrer.includes('unlock.html')) {
+            // Clear the referrer
+            await chrome.storage.session.remove('unlockReferrer');
+            
+            // Find the tab with this URL or create/navigate
+            const tabs = await chrome.tabs.query({ url: unlockReferrer });
+            if (tabs.length > 0) {
+              // Tab still exists, focus it
+              await chrome.tabs.update(tabs[0].id, { active: true });
+              await chrome.windows.update(tabs[0].windowId, { focused: true });
+            } else {
+              // Tab was closed, open a new one
+              await chrome.tabs.create({ url: unlockReferrer });
+            }
+          }
+        } catch (error) {
+          console.error('Error returning to referrer:', error);
+        }
+        
         window.close();
       }, 1000);
     } else {
-      // Failed
-      failedAttempts++;
-      
-      if (failedAttempts >= MAX_ATTEMPTS) {
-        showError(`Incorrect password. ${MAX_ATTEMPTS} attempts failed. You may need to reset your data.`);
+      // Failed - check if this is first time or wrong password for existing collection
+      if (isFirstTime) {
+        // Shouldn't happen in first time setup, but just in case
+        showError('Failed to create collection. Please try again.');
       } else {
-        showError(`Incorrect password. ${MAX_ATTEMPTS - failedAttempts} attempt(s) remaining.`);
+        // Wrong password - offer to create new collection or try again
+        showNewCollectionPrompt();
       }
       
       passwordInput.value = '';
@@ -195,42 +290,119 @@ async function handleUnlock(event) {
 }
 
 /**
- * Handle reset button click
+ * Handle create new collection
  */
-async function handleReset() {
-  const confirmed = confirm(
-    '⚠️ WARNING ⚠️\n\n' +
-    'This will permanently delete ALL your saved presets!\n\n' +
-    'This action cannot be undone.\n\n' +
-    'Are you sure you want to continue?'
-  );
-  
-  if (!confirmed) {
-    return;
-  }
-  
-  const doubleConfirmed = confirm(
-    'Final confirmation:\n\n' +
-    'Type YES in the prompt to confirm deletion of all data.'
-  );
-  
-  if (!doubleConfirmed) {
+async function handleCreateNewCollection() {
+  if (!currentPassword) {
+    showError('Password not available. Please try unlocking again.');
     return;
   }
   
   try {
-    // Clear all storage
-    await chrome.storage.local.clear();
+    const unlockBtn = document.getElementById('unlock-btn');
+    unlockBtn.disabled = true;
+    unlockBtn.textContent = 'Creating Collection...';
+    hideError();
+    hideNewCollectionPrompt();
     
-    // Show success message
-    alert('All data has been reset. You can now set a new master password.');
+    // Create new collection with this password
+    const response = await chrome.runtime.sendMessage({
+      action: 'createNewCollection',
+      password: currentPassword
+    });
     
-    // Reload the page
-    window.location.reload();
+    if (response.success) {
+      showSuccess();
+      setTimeout(() => window.close(), 1000);
+    } else {
+      showError('Failed to create new collection: ' + (response.error || 'Unknown error'));
+    }
   } catch (error) {
-    console.error('Error resetting data:', error);
-    showError('An error occurred while resetting data.');
+    console.error('Error creating new collection:', error);
+    showError('An error occurred while creating the collection.');
+  } finally {
+    document.getElementById('unlock-btn').disabled = false;
+    document.getElementById('unlock-btn').textContent = 'Unlock';
   }
+}
+
+/**
+ * Handle try again
+ */
+function handleTryAgain() {
+  hideNewCollectionPrompt();
+  hideError();
+  document.getElementById('master-password').value = '';
+  document.getElementById('master-password').focus();
+}
+
+/**
+ * Show new collection prompt
+ */
+function showNewCollectionPrompt() {
+  document.getElementById('new-collection-prompt').style.display = 'block';
+  document.getElementById('unlock-form').style.display = 'none';
+  document.getElementById('help-text').style.display = 'none';
+}
+
+/**
+ * Hide new collection prompt
+ */
+function hideNewCollectionPrompt() {
+  document.getElementById('new-collection-prompt').style.display = 'none';
+  document.getElementById('unlock-form').style.display = 'block';
+  document.getElementById('help-text').style.display = 'block';
+}
+
+/**
+ * Handle reset button click
+ */
+async function handleReset() {
+  // Show confirmation UI instead of alert
+  const resetBtn = document.getElementById('reset-btn');
+  const originalText = resetBtn.textContent;
+  
+  resetBtn.textContent = 'Click again to confirm deletion';
+  resetBtn.classList.add('confirm-delete');
+  
+  // Set timeout to revert if not clicked again
+  const timeoutId = setTimeout(() => {
+    resetBtn.textContent = originalText;
+    resetBtn.classList.remove('confirm-delete');
+  }, 5000);
+  
+  // One-time confirmation click handler
+  const confirmHandler = async () => {
+    clearTimeout(timeoutId);
+    resetBtn.removeEventListener('click', confirmHandler);
+    
+    try {
+      resetBtn.disabled = true;
+      resetBtn.textContent = 'Deleting...';
+      
+      // Clear all storage
+      await chrome.storage.local.clear();
+      
+      // Show success and reload
+      showSuccess('All collections deleted. Creating new collection...');
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (error) {
+      console.error('Error resetting data:', error);
+      showError('An error occurred while deleting collections.');
+      resetBtn.disabled = false;
+      resetBtn.textContent = originalText;
+      resetBtn.classList.remove('confirm-delete');
+    }
+  };
+  
+  // Remove old handler first to prevent double-binding
+  resetBtn.removeEventListener('click', handleReset);
+  resetBtn.addEventListener('click', confirmHandler, { once: true });
+  
+  // Re-add original handler after confirmation or timeout
+  setTimeout(() => {
+    resetBtn.addEventListener('click', handleReset, { once: true });
+  }, 5100);
 }
 
 // ============================================================================
@@ -257,13 +429,13 @@ function hideError() {
 /**
  * Show success message
  */
-function showSuccess() {
+function showSuccess(message = 'Returning to your page...') {
   const form = document.getElementById('unlock-form');
   form.innerHTML = `
     <div class="success-message">
       <div class="success-icon">✓</div>
       <h2>Unlocked!</h2>
-      <p>Returning to your page...</p>
+      <p>${message}</p>
     </div>
   `;
 }
