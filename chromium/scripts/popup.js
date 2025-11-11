@@ -39,6 +39,7 @@ function setupEventListeners() {
   document.getElementById('unlock-btn')?.addEventListener('click', handleUnlock);
   document.getElementById('save-btn')?.addEventListener('click', handleSave);
   document.getElementById('manage-btn')?.addEventListener('click', handleManage);
+  document.getElementById('test-forms-btn')?.addEventListener('click', handleTestForms);
   document.getElementById('toggle-domain-btn')?.addEventListener('click', handleToggleDomain);
 }
 
@@ -126,6 +127,27 @@ async function handleManage() {
   } else {
     // Create new tab
     await chrome.tabs.create({ url: optionsUrl });
+  }
+  
+  window.close();
+}
+
+/**
+ * Handle test forms button click
+ */
+async function handleTestForms() {
+  const testFormsUrl = chrome.runtime.getURL('test-forms.html');
+  
+  // Check if test forms page is already open
+  const tabs = await chrome.tabs.query({ url: testFormsUrl });
+  
+  if (tabs.length > 0) {
+    // Focus existing tab
+    await chrome.tabs.update(tabs[0].id, { active: true });
+    await chrome.windows.update(tabs[0].windowId, { focused: true });
+  } else {
+    // Create new tab
+    await chrome.tabs.create({ url: testFormsUrl });
   }
   
   window.close();
@@ -223,8 +245,8 @@ function displayPresets(presets) {
     presetItem.innerHTML = `
       <div class="preset-name">${escapeHtml(preset.name)}</div>
       <div class="preset-actions">
-        <button class="fill-btn" data-index="${index}" data-mode="overwrite">Fill</button>
-        <button class="fill-btn update" data-index="${index}" data-mode="update">Update</button>
+        <button class="fill-btn" data-index="${index}" data-mode="overwrite" title="Fill all fields, overwriting existing values">Fill</button>
+        <button class="fill-btn update" data-index="${index}" data-mode="update" title="Only fill fields that haven't been modified yet">Update</button>
       </div>
     `;
     presetsList.appendChild(presetItem);
