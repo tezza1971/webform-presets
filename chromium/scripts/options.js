@@ -236,6 +236,49 @@ function handleExportCancel() {
 }
 
 /**
+ * Show confirmation dialog (replaces browser confirm())
+ * @param {string} title - Dialog title
+ * @param {string} message - Dialog message (supports \n for line breaks)
+ * @returns {Promise<boolean>} - true if confirmed, false if cancelled
+ */
+function showConfirmDialog(title, message) {
+  return new Promise((resolve) => {
+    const dialog = document.getElementById('confirm-dialog');
+    const titleEl = document.getElementById('confirm-title');
+    const messageEl = document.getElementById('confirm-message');
+    const okBtn = document.getElementById('confirm-ok-btn');
+    const cancelBtn = document.getElementById('confirm-cancel-btn');
+    
+    // Set content
+    titleEl.textContent = title;
+    messageEl.textContent = message;
+    
+    // Show dialog
+    dialog.style.display = 'flex';
+    
+    // Handler for OK button
+    const handleOk = () => {
+      dialog.style.display = 'none';
+      okBtn.removeEventListener('click', handleOk);
+      cancelBtn.removeEventListener('click', handleCancel);
+      resolve(true);
+    };
+    
+    // Handler for Cancel button
+    const handleCancel = () => {
+      dialog.style.display = 'none';
+      okBtn.removeEventListener('click', handleOk);
+      cancelBtn.removeEventListener('click', handleCancel);
+      resolve(false);
+    };
+    
+    // Attach listeners
+    okBtn.addEventListener('click', handleOk);
+    cancelBtn.addEventListener('click', handleCancel);
+  });
+}
+
+/**
  * Export current collection only
  */
 async function exportCurrentCollection() {
@@ -653,8 +696,7 @@ async function validateAndImport(importData) {
   
   const message = `Import ${importData.collections.length} collection(s)?\n\n${collectionInfo}\n\nThis will REPLACE all existing data!`;
   
-  // TODO: Replace with non-modal confirmation dialog
-  const confirmed = confirm('⚠️ WARNING ⚠️\n\n' + message);
+  const confirmed = await showConfirmDialog('⚠️ WARNING ⚠️', message);
   
   if (!confirmed) {
     console.log('[IMPORT] Import cancelled by user');
@@ -704,11 +746,9 @@ async function validateAndImport(importData) {
  * Import legacy format
  */
 async function importLegacyFormat(importData) {
-  const confirmed = confirm(
-    '⚠️ WARNING ⚠️\n\n' +
-    'This appears to be a legacy backup format.\n' +
-    'This will REPLACE all your current presets.\n\n' +
-    'Continue?'
+  const confirmed = await showConfirmDialog(
+    '⚠️ WARNING ⚠️',
+    'This appears to be a legacy backup format.\nThis will REPLACE all your current presets.\n\nContinue?'
   );
   
   if (!confirmed) return;
