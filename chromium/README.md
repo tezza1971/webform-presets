@@ -46,14 +46,14 @@ chromium/
 ## Quick Start Testing
 
 1. Load the extension in Chrome/Brave (see Installation above)
-2. Open `test-form.html` from the project root in your browser
+2. Navigate to any website with a form
 3. Click the extension icon and set a master password
-4. Fill out some fields in the test form
-5. Right-click → "Webform Presets" → "Save as Preset..."
+4. Fill out some fields in the form
+5. Right-click on a form field → "Webform Presets" → "Save Webform Preset"
 6. Name your preset and click Save
-7. Clear the form and right-click again
-8. Select "Webform Presets" → "Fill with..." → [your preset name]
-9. Form fields should auto-fill (except password field)
+7. Clear the form and right-click on a form field again
+8. Select a preset from the context menu to fill the form
+9. Form fields should auto-fill (except password fields)
 
 ## Features
 
