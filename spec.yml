@@ -120,6 +120,10 @@ dataModel:
           type: "string"
           format: "ISO 8601"
           description: "Timestamp when preset was last modified"
+        formUrl:
+          type: "string"
+          format: "URL"
+          description: "The exact URL where the form was captured, used for scope header navigation"
         formSelector:
           type: "object"
           description: "Stored identifier to find the form on the page reliably"
@@ -227,7 +231,7 @@ features:
     trigger:
       method: "Context Menu"
       path: "Right-click -> Webform Presets -> Fill with..."
-      alternativeTrigger: "Extension popup -> Select preset from list"
+      alternativeTrigger: "Extension popup -> Select preset from list or click scope header"
       
     menu:
       description: "The 'Fill with...' submenu dynamically populates with presets matching the current page's scope"
@@ -403,11 +407,14 @@ architecture:
       file: "background.js"
       responsibilities:
         - "Maintain the in-memory encryption key"
+        - "Keep-alive mechanism to persist service worker while unlocked"
+        - "Session storage tracking for unlock state across restarts"
         - "Handle context menu creation and clicks"
         - "Coordinate between content scripts and UI pages"
         - "Manage unlock flow"
         - "Perform encryption/decryption operations"
         - "Handle chrome.storage.local read/write operations"
+        - "Store formUrl with each preset for navigation"
         
     contentScript:
       file: "content.js"
@@ -433,8 +440,9 @@ architecture:
       description: "Full management console for presets"
       features:
         - "Complete preset management"
+        - "Clickable scope headers to open form URLs in named browser windows"
         - "Search and filter"
-        - "Backup/restore"
+        - "Export/import with ZIP support (JSZip library included locally)"
         - "Settings"
         
     unlock:
@@ -501,6 +509,10 @@ architecture:
     uuid:
       recommended: "crypto.randomUUID() (built-in)"
       alternative: "uuid library"
+    jszip:
+      version: "3.10.1"
+      location: "lib/jszip.min.js"
+      usage: "Export/import presets with ZIP support (loaded locally for CSP compliance)"
 
 # ==============================================================================
 # DEVELOPMENT GUIDELINES
@@ -511,6 +523,31 @@ development:
     language: "JavaScript (ES6+)"
     formatting: "Use Prettier with default settings"
     linting: "ESLint with recommended rules"
+    
+  recentImplementations:
+    servicWorkerPersistence:
+      description: "Dual keep-alive strategy prevents encryption key loss"
+      features:
+        - "setInterval pings every 20 seconds while unlocked"
+        - "Port connections from UI pages maintain worker"
+        - "Session storage tracks unlock state across restarts"
+        - "Graceful service worker restart detection"
+    
+    exportImport:
+      description: "Full export/import with ZIP support"
+      features:
+        - "Export all collections or individual collections as ZIP"
+        - "JSZip 3.10.1 loaded locally for CSP compliance"
+        - "Comprehensive logging for debugging"
+        - "Scope-based storage iteration (domain:xxx, url:xxx)"
+    
+    navigation:
+      description: "Clickable scope headers for quick form access"
+      features:
+        - "Click scope header to open exact form URL"
+        - "Named target windows prevent duplicate tabs"
+        - "FormUrl stored with every preset"
+        - "Works with both domain and URL scope types"
     
   testing:
     unit: "Jest for utility functions and encryption/decryption"
