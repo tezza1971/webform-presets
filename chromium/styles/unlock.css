@@ -74,6 +74,98 @@ h1 {
   border-color: #667eea;
 }
 
+/* Sync Configuration Section */
+.sync-config {
+  background: #f7f9fc;
+  border: 2px solid #e0e7ff;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.config-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-weight: 600;
+  color: #4338ca;
+  font-size: 14px;
+}
+
+.config-icon {
+  font-size: 18px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.form-group-inline {
+  margin-bottom: 0;
+}
+
+.form-group-inline input {
+  padding: 10px;
+  font-size: 14px;
+}
+
+.test-btn {
+  width: 100%;
+  padding: 8px;
+  background: #f3f4f6;
+  color: #4b5563;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: 8px;
+}
+
+.test-btn:hover {
+  background: #e5e7eb;
+  border-color: #9ca3af;
+}
+
+.test-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.connection-status {
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.connection-status.success {
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid #6ee7b7;
+}
+
+.connection-status.error {
+  background: #fee;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+
+.config-help {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 0;
+  font-style: italic;
+}
+
 /* Error Message */
 .error-message {
   background: #fee;

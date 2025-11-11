@@ -27,6 +27,42 @@
           >
         </div>
         
+        <div class="sync-config">
+          <div class="config-header">
+            <span class="config-icon">🔄</span>
+            <span>Sync Service Configuration</span>
+          </div>
+          <div class="form-row">
+            <div class="form-group form-group-inline">
+              <label for="sync-host">Host</label>
+              <input 
+                type="text" 
+                id="sync-host" 
+                name="sync-host"
+                placeholder="localhost"
+                value="localhost"
+              >
+            </div>
+            <div class="form-group form-group-inline">
+              <label for="sync-port">Port</label>
+              <input 
+                type="number" 
+                id="sync-port" 
+                name="sync-port"
+                placeholder="8765"
+                value="8765"
+                min="1"
+                max="65535"
+              >
+            </div>
+          </div>
+          <button type="button" id="test-connection-btn" class="test-btn">
+            Test Connection
+          </button>
+          <div id="connection-status" class="connection-status" style="display: none;"></div>
+          <p class="config-help">Configure your local webform-sync service connection</p>
+        </div>
+        
         <div id="error-message" class="error-message" style="display: none;"></div>
         
         <button type="submit" id="unlock-btn" class="primary-btn">

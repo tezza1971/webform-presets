@@ -157,3 +157,46 @@ function getCurrentPageInfo() {
     pathname: url.pathname
   };
 }
+
+// ============================================================================
+// SYNC SERVICE UTILITIES
+// ============================================================================
+
+/**
+ * Get the sync service base URL
+ */
+async function getSyncServiceUrl() {
+  try {
+    const result = await chrome.storage.local.get(['syncHost', 'syncPort']);
+    const host = result.syncHost || 'localhost';
+    const port = result.syncPort || '8765';
+    return `http://${host}:${port}/api/v1`;
+  } catch (error) {
+    console.error('Error getting sync service URL:', error);
+    return 'http://localhost:8765/api/v1';
+  }
+}
+
+/**
+ * Test connection to sync service
+ */
+async function testSyncServiceConnection() {
+  try {
+    const baseUrl = await getSyncServiceUrl();
+    const response = await fetch(`${baseUrl}/health`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      return { success: false, error: `HTTP ${response.status}` };
+    }
+    
+    const data = await response.json();
+    return { success: true, data };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
