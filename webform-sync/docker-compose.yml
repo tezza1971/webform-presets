@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  webform-sync:
+    build: .
+    container_name: webform-sync
+    restart: unless-stopped
+    ports:
+      - "8765:8765"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./webform-sync.yml:/app/webform-sync.yml
+      - ./whitelist.txt:/app/whitelist.txt
+      - ./blacklist.txt:/app/blacklist.txt
+    environment:
+      - TZ=America/New_York
+    networks:
+      - webform-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8765/api/v1/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+networks:
+  webform-network:
+    driver: bridge
