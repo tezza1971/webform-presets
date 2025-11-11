@@ -8,6 +8,13 @@
 // ============================================================================
 
 let formSnapshots = new Map(); // Store initial state of forms
+let lastRightClickedElement = null; // Track which element was right-clicked
+
+// Track right-click events to know which form element was clicked
+document.addEventListener('contextmenu', (e) => {
+  lastRightClickedElement = e.target;
+  console.log('Right-clicked element:', lastRightClickedElement);
+}, true);
 
 // ============================================================================
 // INITIALIZATION
@@ -515,9 +522,11 @@ async function handleMessage(message, sendResponse) {
       case 'captureFormData':
         const forms = getAllForms();
         console.log('Forms found:', forms.length, forms);
+        
         if (forms.length === 0) {
           sendResponse({ error: 'No forms found on page' });
         } else if (forms.length === 1) {
+          // Only one form, use it
           const data = captureFormData(forms[0].selector);
           console.log('Captured form data:', data);
           if (data.error) {
@@ -528,11 +537,44 @@ async function handleMessage(message, sendResponse) {
             sendResponse(data);
           }
         } else {
-          // Multiple forms, need user to select
-          sendResponse({ 
-            multipleForms: true, 
-            forms: forms 
-          });
+          // Multiple forms - try to detect which one was right-clicked
+          let targetForm = null;
+          
+          if (lastRightClickedElement) {
+            // Find the form that contains the right-clicked element
+            let currentElement = lastRightClickedElement;
+            while (currentElement && currentElement !== document.body) {
+              if (currentElement.tagName === 'FORM') {
+                // Found the parent form
+                const formIndex = Array.from(document.querySelectorAll('form')).indexOf(currentElement);
+                if (formIndex >= 0 && formIndex < forms.length) {
+                  targetForm = forms[formIndex];
+                  console.log('Detected form from right-click:', targetForm);
+                }
+                break;
+              }
+              currentElement = currentElement.parentElement;
+            }
+          }
+          
+          if (targetForm) {
+            // Capture the detected form
+            const data = captureFormData(targetForm.selector);
+            console.log('Captured form data from right-clicked form:', data);
+            if (data.error) {
+              sendResponse({ error: data.error });
+            } else if (!data.fieldList || data.fieldList.length === 0) {
+              sendResponse({ error: 'No fields with names found in form' });
+            } else {
+              sendResponse(data);
+            }
+          } else {
+            // Couldn't detect form, show selection modal
+            sendResponse({ 
+              multipleForms: true, 
+              forms: forms 
+            });
+          }
         }
         break;
         
@@ -597,21 +639,69 @@ async function handleMessage(message, sendResponse) {
 function showFormSelectionModal(forms) {
   const pageInfo = getCurrentPageInfo();
   
-  const formOptions = forms.map((form, index) => `
-    <div class="wfp-form-option" data-selector="${escapeHtml(form.selector)}" style="
+  // Helper function to generate descriptive form label
+  const getFormLabel = (form, index) => {
+    // Try to get the actual form element to inspect it
+    const formElement = document.querySelector(form.selector);
+    if (!formElement) {
+      return `Form ${index + 1}`;
+    }
+    
+    // Priority 1: Form ID
+    if (formElement.id) {
+      return formElement.id;
+    }
+    
+    // Priority 2: Form name attribute
+    if (formElement.name) {
+      return formElement.name;
+    }
+    
+    // Priority 3: First heading or legend inside form
+    const heading = formElement.querySelector('h1, h2, h3, legend');
+    if (heading && heading.textContent.trim()) {
+      return heading.textContent.trim().slice(0, 40);
+    }
+    
+    // Priority 4: Describe by fields (first 2-3 field names)
+    const fields = formElement.querySelectorAll('input[name], select[name], textarea[name]');
+    if (fields.length > 0) {
+      const fieldNames = Array.from(fields)
+        .slice(0, 3)
+        .map(f => f.name || f.type)
+        .join(', ');
+      return `${fieldNames}${fields.length > 3 ? '...' : ''}`;
+    }
+    
+    // Fallback
+    return `Form ${index + 1}`;
+  };
+  
+  const formOptions = forms.map((form, index) => {
+    const label = getFormLabel(form, index);
+    const fieldText = form.fieldCount === 1 ? 'field' : 'fields';
+    
+    return `
+    <label class="wfp-form-option" style="
+      display: block;
       padding: 12px;
       border: 2px solid #e5e7eb;
       border-radius: 8px;
       margin-bottom: 8px;
       cursor: pointer;
       transition: all 0.2s;
-    " onmouseover="this.style.borderColor='#667eea'" onmouseout="this.style.borderColor='#e5e7eb'">
-      <div style="font-weight: 600; margin-bottom: 4px;">Form ${index + 1}</div>
-      <div style="font-size: 12px; color: #6b7280;">
-        ${escapeHtml(form.selector.split(':')[1])} • ${form.fieldCount} fields
+    " onmouseover="this.style.borderColor='#667eea'; this.style.background='#f9fafb'" 
+       onmouseout="this.style.borderColor='#e5e7eb'; this.style.background='transparent'">
+      <input type="radio" name="wfp-form-select" value="${escapeHtml(form.selector)}" style="
+        margin-right: 10px;
+        cursor: pointer;
+      " />
+      <span style="font-weight: 600;">${escapeHtml(label)}</span>
+      <div style="font-size: 12px; color: #6b7280; margin-left: 24px;">
+        ${form.fieldCount} ${fieldText} • ${escapeHtml(form.selector.split(':')[1])}
       </div>
-    </div>
-  `).join('');
+    </label>
+  `}).join('');
 
   const modalContent = `
     <div style="text-align: center;">
@@ -624,7 +714,7 @@ function showFormSelectionModal(forms) {
     <div id="wfp-form-list" style="margin-bottom: 16px;">
       ${formOptions}
     </div>
-    <div style="text-align: right;">
+    <div style="display: flex; gap: 8px; justify-content: flex-end;">
       <button id="wfp-cancel-btn" style="
         padding: 8px 16px;
         background: #f3f4f6;
@@ -634,28 +724,51 @@ function showFormSelectionModal(forms) {
         font-size: 14px;
         font-weight: 500;
       ">Cancel</button>
+      <button id="wfp-continue-btn" style="
+        padding: 8px 16px;
+        background: #667eea;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+      " disabled>Continue</button>
     </div>
   `;
 
   const modal = createModal(modalContent, { width: '450px' });
   document.body.appendChild(modal);
 
-  // Handle form selection
-  modal.querySelectorAll('.wfp-form-option').forEach(option => {
-    option.addEventListener('click', async () => {
-      const selector = option.dataset.selector;
-      modal.remove();
-      
-      // Capture the selected form
-      const formData = captureFormData(selector);
-      if (formData.error) {
-        showToast(formData.error, 'error');
-        return;
-      }
-      
-      // Show save modal
-      showSaveModal(formData);
+  const continueBtn = modal.querySelector('#wfp-continue-btn');
+  const radioButtons = modal.querySelectorAll('input[type="radio"]');
+  
+  // Enable continue button when a form is selected
+  radioButtons.forEach(radio => {
+    radio.addEventListener('change', () => {
+      continueBtn.disabled = false;
+      continueBtn.style.opacity = '1';
+      continueBtn.style.cursor = 'pointer';
     });
+  });
+  
+  // Handle continue button
+  continueBtn.addEventListener('click', async () => {
+    const selectedRadio = modal.querySelector('input[name="wfp-form-select"]:checked');
+    if (!selectedRadio) return;
+    
+    const selector = selectedRadio.value;
+    modal.remove();
+    
+    // Capture the selected form
+    const formData = captureFormData(selector);
+    if (formData.error) {
+      showToast(formData.error, 'error');
+      return;
+    }
+    
+    // Show save modal
+    showSaveModal(formData);
   });
 
   // Cancel button
