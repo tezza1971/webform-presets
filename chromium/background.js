@@ -92,7 +92,7 @@ async function createContextMenus() {
     chrome.contextMenus.create({
       id: 'unlock-extension',
       title: '🔒 Unlock Webform Presets',
-      contexts: ['page', 'editable']
+      contexts: ['editable']
     });
     return;
   }
@@ -102,14 +102,14 @@ async function createContextMenus() {
   chrome.contextMenus.create({
     id: 'save-preset',
     title: '💾 Save Webform Preset',
-    contexts: ['page', 'editable']
+    contexts: ['editable']
   });
   
   // Manage presets
   chrome.contextMenus.create({
     id: 'manage-presets',
     title: '⚙️ Manage Webform Presets',
-    contexts: ['page', 'editable']
+    contexts: ['editable']
   });
   
   // Preset items will be added dynamically by updateContextMenusForPage
@@ -141,7 +141,7 @@ async function updateContextMenusForPage(url) {
       chrome.contextMenus.create({
         id: 'enable-for-domain',
         title: '✅ Enable Webform Presets',
-        contexts: ['page', 'editable']
+        contexts: ['editable']
       });
       return;
     }
@@ -150,13 +150,13 @@ async function updateContextMenusForPage(url) {
     chrome.contextMenus.create({
       id: 'save-preset',
       title: '💾 Save Webform Preset',
-      contexts: ['page', 'editable']
+      contexts: ['editable']
     });
     
     chrome.contextMenus.create({
       id: 'manage-presets',
       title: '⚙️ Manage Webform Presets',
-      contexts: ['page', 'editable']
+      contexts: ['editable']
     });
 
     // Get presets for this page
@@ -195,7 +195,7 @@ async function updateContextMenusForPage(url) {
       chrome.contextMenus.create({
         id: separatorId,
         type: 'separator',
-        contexts: ['page', 'editable']
+        contexts: ['editable']
       });
       presetMenuItems.add(separatorId);
       
@@ -204,8 +204,8 @@ async function updateContextMenusForPage(url) {
         const menuId = `preset-${preset.id}`;
         chrome.contextMenus.create({
           id: menuId,
-          title: `📝 ${preset.name}`,
-          contexts: ['page', 'editable']
+          title: `� Fill: ${preset.name}`,
+          contexts: ['editable']
         });
         presetMenuItems.add(menuId);
       });
