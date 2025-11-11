@@ -251,6 +251,8 @@ function captureFormData(formSelector) {
   console.log('Fields found:', fields.length);
   const data = {};
   const fieldList = [];
+  const emptyFields = [];
+  const hiddenFields = [];
   let passwordFieldsFound = 0;
   
   fields.forEach(field => {
@@ -263,32 +265,47 @@ function captureFormData(formSelector) {
     
     if (field.name) {
       const value = getFieldValue(field);
+      const isEmpty = !value || value.trim() === '';
+      const isHidden = field.type === 'hidden' || 
+                       field.offsetParent === null || 
+                       window.getComputedStyle(field).display === 'none' ||
+                       window.getComputedStyle(field).visibility === 'hidden';
       
-      // Skip empty fields (but keep unchecked checkboxes as they have explicit false state)
+      const fieldInfo = {
+        name: field.name,
+        type: field.type,
+        value: value,
+        isEmpty: isEmpty,
+        isHidden: isHidden
+      };
+      
+      // Checkboxes and radios always included (explicit state)
       if (field.type === 'checkbox' || field.type === 'radio') {
-        // Always include checkboxes and radios to preserve their state
         data[field.name] = value;
-        fieldList.push({
-          name: field.name,
-          type: field.type,
-          value: value
-        });
-      } else if (value && value.trim() !== '') {
-        // Only include text fields that have actual content
+        fieldList.push(fieldInfo);
+      } 
+      // Non-empty, visible fields included by default
+      else if (!isEmpty && !isHidden) {
         data[field.name] = value;
-        fieldList.push({
-          name: field.name,
-          type: field.type,
-          value: value
-        });
-      } else {
-        console.log(`Skipping empty field: ${field.name}`);
+        fieldList.push(fieldInfo);
+      }
+      // Hidden fields (whether empty or not) - add to hidden list only
+      else if (isHidden) {
+        hiddenFields.push(fieldInfo);
+        console.log(`Hidden field (excluded by default): ${field.name}`);
+      }
+      // Empty but visible fields - add to empty list
+      else if (isEmpty) {
+        emptyFields.push(fieldInfo);
+        console.log(`Empty field (excluded by default): ${field.name}`);
       }
     }
   });
   
   console.log('Captured data:', data);
   console.log('Field list:', fieldList);
+  console.log('Empty fields:', emptyFields.length);
+  console.log('Hidden fields:', hiddenFields.length);
   if (passwordFieldsFound > 0) {
     console.warn(`⚠️ ${passwordFieldsFound} password field(s) excluded from preset for security`);
   }
@@ -297,6 +314,8 @@ function captureFormData(formSelector) {
     selector: formSelector,
     data,
     fieldList,
+    emptyFields,
+    hiddenFields,
     passwordFieldsExcluded: passwordFieldsFound
   };
 }
@@ -790,13 +809,17 @@ function showFormSelectionModal(forms) {
 function showSaveModal(formData) {
   const pageInfo = getCurrentPageInfo();
   
-  const fieldCheckboxes = formData.fieldList.map(field => {
+  // Function to generate field checkbox HTML
+  const createFieldCheckbox = (field, isDefaultVisible = true) => {
     const displayName = field.label || field.name;
     const secondaryInfo = field.label ? field.name : '';
+    const valueDisplay = field.value ? escapeHtml(field.value.substring(0, 50)) + (field.value.length > 50 ? '...' : '') : '(empty)';
+    const fieldTypeDisplay = field.isHidden ? `${field.type} • 👁️‍🗨️ hidden` : field.type;
+    const dataAttrs = `data-is-empty="${field.isEmpty ? 'true' : 'false'}" data-is-hidden="${field.isHidden ? 'true' : 'false'}"`;
     
     return `
     <label style="
-      display: inline-flex;
+      display: ${isDefaultVisible ? 'inline-flex' : 'none'};
       align-items: flex-start;
       padding: 10px 12px;
       border: 2px solid #e5e7eb;
@@ -807,8 +830,8 @@ function showSaveModal(formData) {
       min-width: 200px;
       flex: 1 1 auto;
       background: white;
-    " class="wfp-field-checkbox" onmouseover="this.style.borderColor='#667eea'; this.style.background='#f5f7ff'" onmouseout="this.style.borderColor='#e5e7eb'; this.style.background='white'">
-      <input type="checkbox" checked value="${escapeHtml(field.name)}" style="
+    " class="wfp-field-checkbox" ${dataAttrs} onmouseover="this.style.borderColor='#667eea'; this.style.background='#f5f7ff'" onmouseout="this.style.borderColor='#e5e7eb'; this.style.background='white'">
+      <input type="checkbox" ${isDefaultVisible ? 'checked' : ''} value="${escapeHtml(field.name)}" style="
         margin-right: 10px;
         margin-top: 2px;
         width: 18px;
@@ -819,12 +842,21 @@ function showSaveModal(formData) {
       <div style="flex: 1; min-width: 0;">
         <div style="font-weight: 500; font-size: 13px; margin-bottom: 2px; word-break: break-word;">${escapeHtml(displayName)}</div>
         <div style="font-size: 11px; color: #6b7280; word-break: break-word;">
-          ${secondaryInfo ? escapeHtml(secondaryInfo) + ' • ' : ''}${escapeHtml(field.type)} • ${escapeHtml(field.value.substring(0, 50))}${field.value.length > 50 ? '...' : ''}
+          ${secondaryInfo ? escapeHtml(secondaryInfo) + ' • ' : ''}${escapeHtml(fieldTypeDisplay)} • ${valueDisplay}
         </div>
       </div>
     </label>
   `;
-  }).join('');
+  };
+  
+  // Generate all field checkboxes (visible by default, empty hidden, hidden hidden)
+  const allFields = [
+    ...formData.fieldList.map(f => createFieldCheckbox(f, true)),
+    ...formData.emptyFields.map(f => createFieldCheckbox(f, false)),
+    ...formData.hiddenFields.map(f => createFieldCheckbox(f, false))
+  ].join('');
+  
+  const totalFieldCount = formData.fieldList.length + formData.emptyFields.length + formData.hiddenFields.length;
 
   const modalContent = `
     <form id="wfp-save-form">
@@ -893,9 +925,25 @@ function showSaveModal(formData) {
       </div>
 
       <div style="margin-bottom: 20px;">
-        <label style="display: block; margin-bottom: 10px; font-weight: 500; font-size: 14px;">
-          Fields to Include: (${formData.fieldList.length})
-        </label>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+          <label style="font-weight: 500; font-size: 14px;">
+            Fields to Include: (<span id="wfp-visible-count">${formData.fieldList.length}</span>/<span id="wfp-total-count">${totalFieldCount}</span>)
+          </label>
+          <div style="display: flex; gap: 12px; align-items: center;">
+            ${formData.emptyFields.length > 0 ? `
+            <label style="display: flex; align-items: center; font-size: 13px; cursor: pointer;">
+              <input type="checkbox" id="wfp-show-empty" style="margin-right: 6px;">
+              <span>Include empty fields (${formData.emptyFields.length})</span>
+            </label>
+            ` : ''}
+            ${formData.hiddenFields.length > 0 ? `
+            <label style="display: flex; align-items: center; font-size: 13px; cursor: pointer;">
+              <input type="checkbox" id="wfp-show-hidden" style="margin-right: 6px;">
+              <span>Include hidden fields (${formData.hiddenFields.length})</span>
+            </label>
+            ` : ''}
+          </div>
+        </div>
         <div id="wfp-field-list" style="
           display: flex;
           flex-wrap: wrap;
@@ -905,7 +953,7 @@ function showSaveModal(formData) {
           padding: 8px;
           background: #f9fafb;
         ">
-          ${fieldCheckboxes}
+          ${allFields}
         </div>
         <div style="margin-top: 8px; display: flex; gap: 8px;">
           <button type="button" id="wfp-select-all" style="
@@ -916,7 +964,7 @@ function showSaveModal(formData) {
             border-radius: 4px;
             cursor: pointer;
             color: #667eea;
-          ">Select All</button>
+          ">Select All Visible</button>
           <button type="button" id="wfp-select-none" style="
             font-size: 12px;
             padding: 4px 8px;
@@ -939,6 +987,20 @@ function showSaveModal(formData) {
         ">
           <span style="font-weight: 600;">🔒 Security Note:</span>
           ${formData.passwordFieldsExcluded} password field(s) excluded for security
+        </div>
+        ` : ''}
+        ${(formData.emptyFields.length > 0 || formData.hiddenFields.length > 0) ? `
+        <div style="
+          margin-top: 12px;
+          padding: 10px 12px;
+          background: #e0f2fe;
+          border: 1px solid #0ea5e9;
+          border-radius: 6px;
+          font-size: 12px;
+          color: #0c4a6e;
+        ">
+          <span style="font-weight: 600;">💡 Tip:</span>
+          Empty fields will be cleared during fill operations. Hidden fields can be overwritten with this extension (normally impossible to modify).
         </div>
         ` : ''}
       </div>
@@ -989,13 +1051,51 @@ function showSaveModal(formData) {
   updateRadioStyles();
 
   // Select all/none buttons
+  const updateVisibleCount = () => {
+    const visibleFields = modal.querySelectorAll('.wfp-field-checkbox[style*="display: inline-flex"]').length;
+    const visibleCountEl = modal.querySelector('#wfp-visible-count');
+    if (visibleCountEl) {
+      visibleCountEl.textContent = visibleFields;
+    }
+  };
+  
   modal.querySelector('#wfp-select-all').addEventListener('click', () => {
-    modal.querySelectorAll('#wfp-field-list input[type="checkbox"]').forEach(cb => cb.checked = true);
+    // Only select checkboxes that are visible
+    modal.querySelectorAll('.wfp-field-checkbox').forEach(label => {
+      if (label.style.display !== 'none') {
+        const checkbox = label.querySelector('input[type="checkbox"]');
+        if (checkbox) checkbox.checked = true;
+      }
+    });
   });
 
   modal.querySelector('#wfp-select-none').addEventListener('click', () => {
     modal.querySelectorAll('#wfp-field-list input[type="checkbox"]').forEach(cb => cb.checked = false);
   });
+  
+  // Show/hide empty fields toggle
+  const showEmptyCheckbox = modal.querySelector('#wfp-show-empty');
+  if (showEmptyCheckbox) {
+    showEmptyCheckbox.addEventListener('change', (e) => {
+      const show = e.target.checked;
+      modal.querySelectorAll('.wfp-field-checkbox[data-is-empty="true"]').forEach(label => {
+        label.style.display = show ? 'inline-flex' : 'none';
+      });
+      updateVisibleCount();
+    });
+  }
+  
+  // Show/hide hidden fields toggle
+  const showHiddenCheckbox = modal.querySelector('#wfp-show-hidden');
+  if (showHiddenCheckbox) {
+    showHiddenCheckbox.addEventListener('change', (e) => {
+      const show = e.target.checked;
+      modal.querySelectorAll('.wfp-field-checkbox[data-is-hidden="true"]').forEach(label => {
+        label.style.display = show ? 'inline-flex' : 'none';
+      });
+      updateVisibleCount();
+    });
+  }
 
   // Cancel button
   modal.querySelector('#wfp-cancel-save').addEventListener('click', () => {
